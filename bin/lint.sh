@@ -3,18 +3,13 @@
 dir=$(dirname "$0")
 cd "$dir/.."
 
-# Python
-black src/main/python src/test/python
-isort src/main/python src/test/python
-python -m flake8 src/main/python src/test/python
+exitCode=0
+black src tests
+code=$?; test $code -eq 0 || exitCode=$code
+isort src tests
+code=$?; test $code -eq 0 || exitCode=$code
+python -m flake8 src tests
+code=$?; test $code -eq 0 || exitCode=$code
 validate-pyproject pyproject.toml
-
-# Java
-mvn \
-  license:update-project-license \
-  license:update-file-header \
-  formatter:format \
-  impsort:sort
-
-# JavaScript
-#TODO
+code=$?; test $code -eq 0 || exitCode=$code
+exit $exitCode

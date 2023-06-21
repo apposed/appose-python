@@ -1,7 +1,7 @@
 help:
 	@echo "Available targets:\n\
 		clean - remove build files and directories\n\
-		setup - create developer environment (mamba + node.js)\n\
+		setup - create mamba developer environment\n\
 		lint  - run code formatters and linters\n\
 		test  - run automated test suite\n\
 		dist  - generate release archives\n\

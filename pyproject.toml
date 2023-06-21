@@ -41,6 +41,8 @@ dev = [
     "black",
     "build",
     "flake8",
+    "flake8-pyproject",
+    "flake8-typing-imports",
     "isort",
     "pytest",
     "numpy",
@@ -49,19 +51,29 @@ dev = [
 ]
 
 [project.urls]
-homepage = "https://github.com/apposed/appose"
-documentation = "https://github.com/apposed/appose/blob/main/README.md"
-source = "https://github.com/apposed/appose"
-download = "https://pypi.org/project/appose"
-tracker = "https://github.com/apposed/appose/issues"
+homepage = "https://github.com/apposed/appose-python"
+documentation = "https://github.com/apposed/appose-python/blob/main/README.md"
+source = "https://github.com/apposed/appose-python"
+download = "https://pypi.org/project/appose-python"
+tracker = "https://github.com/apposed/appose-python/issues"
 
 [tool.setuptools]
-package-dir = {"" = "src/main/python"}
-include-package-data = false
+package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["src/main/python"]
-namespaces = false
+where = ["src"]
 
+# Thanks to Flake8-pyproject, we can configure flake8 here!
+[tool.flake8]
+exclude = ["bin", "build", "dist"]
+extend-ignore = ["E203"]
+# See https://black.readthedocs.io/en/stable/guides/using_black_with_other_tools.html#flake8
+max-line-length = 88
+min_python_version = "3.10"
+ 
 [tool.isort]
 profile = "black"
+
+[tool.pytest.ini_options]
+addopts = "-s -p no:faulthandler"

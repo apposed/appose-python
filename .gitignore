@@ -1,20 +1,9 @@
-# Python
 *.py[cod]
 *__pycache__/
 *egg-info/
 /.eggs/
+/.idea/
+/.vscode/
 /build/
 /dist/
 /eggs/
-
-# Java
-/.classpath
-/.factorypath
-/.idea/
-/.project
-/.settings/
-/.vscode/
-/target/
-
-# JavaScript
-/node_modules/
