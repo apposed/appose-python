@@ -21,8 +21,6 @@ channels:
   - defaults
 dependencies:
   - python >= 3.10
-  # Project dependencies
-  - numpy
   # Project from source
   - pip
   - pip:

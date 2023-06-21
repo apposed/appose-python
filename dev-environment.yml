@@ -20,8 +20,6 @@ channels:
   - defaults
 dependencies:
   - python >= 3.10
-  # Project dependencies
-  - numpy
   # Developer tools
   - autopep8
   - black
