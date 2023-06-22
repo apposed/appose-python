@@ -33,10 +33,11 @@ The appose.service package contains classes for services and tasks.
 
 import subprocess
 import threading
-import uuid
 from enum import Enum
+from pathlib import Path
 from traceback import format_exc
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from uuid import uuid4
 
 from .types import Args, decode, encode
 
@@ -51,12 +52,16 @@ class Service:
 
     _service_count = 0
 
-    def __init__(self, cwd: str, args: Sequence[str]) -> None:
+    def __init__(self, cwd: Union[str, Path], args: Sequence[str]) -> None:
         self._cwd = cwd
         self._args = args[:]
         self._tasks: Dict[str, "Task"] = {}
         self._service_id = Service._service_count
         Service._service_count += 1
+        self._process: Optional[subprocess.Popen] = None
+        self._stdout_thread: Optional[threading.Thread] = None
+        self._stderr_thread: Optional[threading.Thread] = None
+        self._debug_callback: Optional[Callable[[Any], Any]] = None
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
         """
@@ -66,7 +71,7 @@ class Service:
         :param debug_callback:
             A function that accepts a single string argument.
         """
-        self.debug_callback = debug_callback
+        self._debug_callback = debug_callback
 
     def start(self) -> None:
         """
@@ -87,7 +92,7 @@ class Service:
             self._args,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            cwd=self.cwd,
+            cwd=self._cwd,
             text=True
         )
         self._stdout_thread = threading.Thread(
@@ -126,6 +131,7 @@ class Service:
         """
         Input loop processing lines from the worker's stdout stream.
         """
+        # noinspection PyBroadException
         try:
             while True:
                 line = self._process.stdout.readline()
@@ -136,12 +142,13 @@ class Service:
                 response = decode(line)
                 uuid = response.get("task")
                 if uuid is None:
-                    self._debug_service("Invalid service message: {line}");
+                    self._debug_service("Invalid service message: {line}")
                     continue
                 task = self._tasks.get(uuid)
                 if task is None:
                     self._debug_service(f"No such task: {uuid}")
                     continue
+                # noinspection PyProtectedMember
                 task._handle(response)
         except Exception:
             self._debug_service(format_exc())
@@ -150,6 +157,7 @@ class Service:
         """
         Input loop processing lines from the worker's stderr stream.
         """
+        # noinspection PyBroadException
         try:
             while True:
                 line = self._process.stderr.readline()
@@ -170,9 +178,9 @@ class Service:
         """
         Pass a message to the callback registered via the debug method.
         """
-        if self.debug_callback is None:
+        if self._debug_callback is None:
             return
-        self.debug_callback(f"[{prefix}-{self._service_id}] {message}")
+        self._debug_callback(f"[{prefix}-{self._service_id}] {message}")
 
 
 class TaskStatus(Enum):
@@ -214,6 +222,7 @@ class TaskEvent:
         self.response_type: ResponseType = response_type
 
 
+# noinspection PyProtectedMember
 class Task:
     """
     An Appose *task* is an asynchronous operation performed by its
@@ -223,7 +232,7 @@ class Task:
     def __init__(
         self, service: Service, script: str, inputs: Optional[Args] = None
     ) -> None:
-        self.uuid = uuid.uuid4().hex
+        self.uuid = uuid4().hex
         self.service = service
         self.script = script
         self.inputs: Args = {}
@@ -237,7 +246,7 @@ class Task:
         self.error: Optional[str] = None
         self.listeners: List[Callable[["TaskEvent"], None]] = []
         self.cv = threading.Condition()
-        self.service.tasks[self.uuid] = self
+        self.service._tasks[self.uuid] = self
 
     def start(self) -> "Task":
         with self.cv:
@@ -287,13 +296,13 @@ class Task:
 
         encoded = encode(request)
         # NB: Flush is necessary to ensure worker receives the data!
-        print(encoded, file=self.service.process.stdin, flush=True)
-        self._debug_service(encoded)
+        print(encoded, file=self.service._process.stdin, flush=True)
+        self.service._debug_service(encoded)
 
     def _handle(self, response: Args) -> None:
         maybe_response_type = response.get("responseType")
         if maybe_response_type is None:
-            self._debug_service("Message type not specified")
+            self.service._debug_service("Message type not specified")
             return
         response_type = ResponseType(maybe_response_type)
 
@@ -309,20 +318,20 @@ class Task:
                 if maximum is not None:
                     self.maximum = int(maximum)
             case ResponseType.COMPLETION:
-                self.service.tasks.pop(self.uuid, None)
+                self.service._tasks.pop(self.uuid, None)
                 self.status = TaskStatus.COMPLETE
                 outputs = response.get("outputs")
                 if outputs is not None:
                     self.outputs.update(outputs)
             case ResponseType.CANCELATION:
-                self.service.tasks.pop(self.uuid, None)
+                self.service._tasks.pop(self.uuid, None)
                 self.status = TaskStatus.CANCELED
             case ResponseType.FAILURE:
-                self.service.tasks.pop(self.uuid, None)
+                self.service._tasks.pop(self.uuid, None)
                 self.status = TaskStatus.FAILED
                 self.error = response.get("error")
             case _:
-                self._debug_service(f"Invalid service message type: {response_type}")
+                self.service._debug_service(f"Invalid service message type: {response_type}")
                 return
 
         event = TaskEvent(self, response_type)

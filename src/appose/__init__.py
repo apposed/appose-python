@@ -145,4 +145,4 @@ def java(vendor: str, version: str) -> Builder:
 
 
 def conda(environment_yaml: Path) -> Builder:
-    return Builder().conda(yaml=environment_yaml)
+    return Builder().conda(environment_yaml=environment_yaml)

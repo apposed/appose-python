@@ -33,14 +33,15 @@ TODO
 
 import os
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Union
+from typing import Any, Dict, Optional, Sequence, Union, List
 
 from .service import Service
 
 
 class Environment:
-    def __init__(self, base: Union[Path, str]):
+    def __init__(self, base: Union[Path, str], use_system_path: bool = False):
         self.base = Path(base).absolute()
+        self.use_system_path = use_system_path
 
     def python(self) -> Service:
         """
@@ -58,7 +59,8 @@ class Environment:
            "python", "python.exe",
            "bin/python", "bin/python.exe",
         ]
-        return self.service(python_exes, "-c",
+        return self.service(
+            python_exes, "-c",
             "import appose.python_worker; appose.python_worker.main()",
         )
 
@@ -78,10 +80,11 @@ class Environment:
         Groovy scripts asynchronously on its linked process running a
         `GroovyWorker`.
 
-        :param class_path: Additional classpath elements to pass to the JVM
-                           via its `-cp` command line option.
-        :param jvm_args: Command line arguments to pass to the JVM invocation
-                         (e.g. `-Xmx4g`).
+        :param class_path:
+            Additional classpath elements to pass to the JVM
+            via its `-cp` command line option.
+        :param jvm_args:
+            Command line arguments to pass to the JVM invocation (e.g. `-Xmx4g`).
         :return: The newly created service.
         :see: python() To create a service for Python script execution.
         :raises IOError: If something goes wrong starting the worker process.
@@ -137,9 +140,9 @@ class Environment:
             "jre/bin/java", "jre/bin/java.exe",
             "jre/bin/java", "jre/bin/java.exe",
         ]
-        return self.service(java_exes, args=args)
+        return self.service(java_exes, *args)
 
-    def service(self, exes: Sequence[str], *args: Sequence[str]) -> Service:
+    def service(self, exes: Sequence[str], *args) -> Service:
         """
         Create a service with the given command line arguments.
 
@@ -148,8 +151,11 @@ class Environment:
         meaning it accepts requests on stdin and produces responses on
         stdout, both formatted according to Appose's assumptions.
 
-        :param args: Command line arguments to launch the service (e.g.
-                     ["customApposeWorker.sh", "-v"]).
+        :param exes:
+            List of executables to try for launching the worker process.
+        :param args:
+            Command line arguments to pass to the worker process
+            (e.g. ["-v", "--enable-everything"]).
         :return: The newly created service.
         :see: groovy() To create a service for Groovy script execution.
         :see: python() To create a service for Python script execution.
@@ -158,36 +164,51 @@ class Environment:
         if not exes:
             raise ValueError("No executable given")
 
-        exe_files = (_exe_file(exe) for exe in exes)
+        exe_files = (self._exe_file(exe) for exe in exes)
         exe = find_first(exe for exe in exe_files if can_execute(exe))
         if not exe:
-            raise ValueError(f"No executables found amonst candidates: {exes}");
+            raise ValueError(f"No executables found amongst candidates: {exes}")
 
-        all_args = [str(exe)] + args
+        all_args: List[str] = [str(exe)]
+        all_args.extend(args)
         return Service(self.base, all_args)
 
-    def _exe_file(exe: str) -> Path:
+    def _exe_file(self, exe: str) -> Path:
         path = Path(exe)
         return path if path.is_absolute() else self.base / path
 
 
 class Builder:
+
+    def __init__(self):
+        self.base_dir: Optional[Path] = None
+        self.system_path: bool = False
+        self.conda_environment_yaml: Optional[Path] = None
+        self.java_vendor: Optional[str] = None
+        self.java_version: Optional[str] = None
+
     def build(self):
         # TODO: Build the thing!
         # Hash the state to make a base directory name.
         # - Construct conda environment from condaEnvironmentYaml.
         # - Download and unpack JVM of the given vendor+version.
         # - Populate ${baseDirectory}/jars with Maven artifacts?
-        return Environment(self.base)
+        return Environment(self.base_dir, self.system_path)
+
+    def use_system_path(self) -> "Builder":
+        self.system_path = True
+        return self
 
     def base(self, directory: Path) -> "Builder":
-        self.base: Path = directory
+        self.base_dir: Path = directory
         return self
+
+    # CTR START HERE -- compare this class with Java for parity
 
     # -- Conda --
 
-    def conda(self, yaml: Path) -> "Builder":
-        self.conda_environment_yaml: Path = yaml
+    def conda(self, environment_yaml: Path) -> "Builder":
+        self.conda_environment_yaml: Path = environment_yaml
         return self
 
     # -- Java --
@@ -200,7 +221,7 @@ class Builder:
         return self
 
 
-def find_first(seq: Sequence[Any], or_else: Any = None) -> Any:
+def find_first(seq, or_else: Any = None) -> Any:
     try:
         return next(iter(seq))
     except StopIteration:
@@ -214,6 +235,6 @@ def can_execute(exe: Path):
     # 256 128 064 032 016 008 004 002 001
     #  r   w   x   r   w   x   r   w   x
     ux = st_mode & 64
-    gx = st_mode & 8
+    # gx = st_mode & 8
     ox = st_mode & 1
-    return ux or ox # TODO: check if user belongs to group
+    return ux or ox  # TODO: check if user belongs to group
