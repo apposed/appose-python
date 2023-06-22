@@ -28,14 +28,70 @@
 ###
 
 import json
-from typing import Any, Dict
+from multiprocessing.shared_memory import SharedMemory
+
+import numpy
+from typing import Any, Dict, Sequence, Tuple
 
 Args = Dict[str, Any]
 
+def _encode(value: Any) -> Any:
+    if isinstance(value, numpy.ndarray):
+
 
 def encode(data: Args) -> str:
-    return json.dumps(data)
+    return json.dumps({name: _encode(value) for name, value in data.items()})
 
 
 def decode(the_json: str) -> Args:
     return json.loads(the_json)
+
+
+def ndarray(shape: Sequence[int], dtype: "numpy.dtype", shm_name: str = None) -> Tuple[str, "numpy.ndarray"]:
+    """
+    Create an ndarray in shared memory, without initializing any element values.
+
+    :param shape: int or tuple of ints
+        Shape of the new array, e.g., `(2, 3)` or `2`.
+    :param dtype: data-type, optional
+        The desired data-type for the array, e.g., `numpy.int8`.
+    :param shm_name: TODO
+    :return: (shm.name, ndarray) pair
+    """
+
+    # Allocate shared memory matching size of numpy array.
+    size = numpy.prod(shape) * dtype.itemsize
+    if shm_name is None:
+        shm = SharedMemory(create=True, size=size)
+    else:
+        shm = SharedMemory(name=shm_name, create=False, size=size)
+
+    # NB: If this Python process closes, the memory will
+    # be destroyed even if other processes are using it.
+    #
+    # https://github.com/python/cpython/issues/82300
+    # ^ "resource tracker destroys shared memory segments
+    #    when other processes should still have valid access"
+    #
+    # https://stackoverflow.com/q/64915548
+    # ^ this shows how to use the undocumented unregister function
+    #   of resource_tracker to prevent Python from destroying shared
+    #   memory segments when the creating process shuts down.
+
+    # Construct an ndarray around the shared memory block.
+    ndarray: numpy.ndarray = numpy.frombuffer(shm.buf, dtype=dtype).reshape(shape)
+    ndarray.data
+
+    # Ugh. No way that I know to attach the shm_name to the numpy.ndarray.
+    # Would be better if we could return one object that knows its name.
+    # However, barring that, we can have an internal weak map here from
+    # ndarray -> SharedMemory  so that one can query the name of the
+    # shared memory of an ndarray created using the ndarray function.
+    # With this, we can reconstruct ndarrays passed between processes.
+
+    # However, I'm tempted to purge the numpy dependency completely from
+    # Appose, in favor of only SharedMemory objects. And it's the responsibility
+    # of the calling code to wrap those into whatever structure they need.
+    # For Java this could be direct ByteBuffers, for Python this could be
+    # ndarrays or really anything that can be wrapped around a memoryview.
+    return shm.name, ndarray
