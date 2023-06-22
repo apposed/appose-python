@@ -60,12 +60,12 @@ def test_groovy():
     env = appose.base(".").use_system_path().build()
     # FIXME: Resolve these dependencies in a better way.
     class_path = [
-        "/home/curtis/code/appose/appose-java/target/appose-0.1.0-SNAPSHOT.jar",
-        "/home/curtis/code/appose/appose-java/target/dependency/groovy-3.0.4.jar",
-        "/home/curtis/code/appose/appose-java/target/dependency/groovy-json-3.0.4.jar",
-        "/home/curtis/code/appose/appose-java/target/dependency/ivy-2.4.0.jar",
-        "/home/curtis/code/appose/appose-java/target/dependency/jna-5.13.0.jar",
-        "/home/curtis/code/appose/appose-java/target/dependency/jna-platform-5.13.0.jar",
+        "../appose-java/target/appose-0.1.0-SNAPSHOT.jar",
+        "../appose-java/target/dependency/groovy-3.0.4.jar",
+        "../appose-java/target/dependency/groovy-json-3.0.4.jar",
+        "../appose-java/target/dependency/ivy-2.4.0.jar",
+        "../appose-java/target/dependency/jna-5.13.0.jar",
+        "../appose-java/target/dependency/jna-platform-5.13.0.jar",
     ]
     with env.groovy(class_path=class_path) as service:
         execute_and_assert(service, collatz_groovy)

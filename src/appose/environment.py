@@ -33,8 +33,9 @@ TODO
 
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence, Union, List
+from typing import Dict, Optional, Sequence, Union, List
 
+from .paths import find_exe
 from .service import Service
 
 
@@ -138,7 +139,6 @@ class Environment:
             "java", "java.exe",
             "bin/java", "bin/java.exe",
             "jre/bin/java", "jre/bin/java.exe",
-            "jre/bin/java", "jre/bin/java.exe",
         ]
         return self.service(java_exes, *args)
 
@@ -164,18 +164,19 @@ class Environment:
         if not exes:
             raise ValueError("No executable given")
 
-        exe_files = (self._exe_file(exe) for exe in exes)
-        exe = find_first(exe for exe in exe_files if can_execute(exe))
-        if not exe:
+        dirs: List[str] = (
+            os.environ["PATH"].split(os.pathsep)
+            if self.use_system_path
+            else [self.base]
+        )
+
+        exe_file = find_exe(dirs, exes)
+        if exe_file is None:
             raise ValueError(f"No executables found amongst candidates: {exes}")
 
-        all_args: List[str] = [str(exe)]
+        all_args: List[str] = [str(exe_file)]
         all_args.extend(args)
         return Service(self.base, all_args)
-
-    def _exe_file(self, exe: str) -> Path:
-        path = Path(exe)
-        return path if path.is_absolute() else self.base / path
 
 
 class Builder:
@@ -203,8 +204,6 @@ class Builder:
         self.base_dir: Path = directory
         return self
 
-    # CTR START HERE -- compare this class with Java for parity
-
     # -- Conda --
 
     def conda(self, environment_yaml: Path) -> "Builder":
@@ -219,22 +218,3 @@ class Builder:
         if version is not None:
             self.java_version: str = version
         return self
-
-
-def find_first(seq, or_else: Any = None) -> Any:
-    try:
-        return next(iter(seq))
-    except StopIteration:
-        return or_else
-
-
-def can_execute(exe: Path):
-    # TODO: There must be an easier way to do this in Python. Right?
-    st_mode = exe.stat().st_mode
-    # |----u----| |----g----| |----o----|
-    # 256 128 064 032 016 008 004 002 001
-    #  r   w   x   r   w   x   r   w   x
-    ux = st_mode & 64
-    # gx = st_mode & 8
-    ox = st_mode & 1
-    return ux or ox  # TODO: check if user belongs to group
