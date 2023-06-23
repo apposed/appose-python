@@ -24,7 +24,6 @@ classifiers = [
     "Operating System :: MacOS",
     "Topic :: Scientific/Engineering",
     "Topic :: Software Development :: Libraries :: Java Libraries",
-    "Topic :: Software Development :: Libraries :: JavaScript Libraries",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Utilities",
 ]

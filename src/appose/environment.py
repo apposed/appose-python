@@ -6,13 +6,13 @@
 # %%
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,7 +33,7 @@ TODO
 
 import os
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Union, List
+from typing import Dict, List, Optional, Sequence, Union
 
 from .paths import find_exe
 from .service import Service
@@ -57,11 +57,14 @@ class Environment:
         :raises IOError: If something goes wrong starting the worker process.
         """
         python_exes = [
-           "python", "python.exe",
-           "bin/python", "bin/python.exe",
+            "python",
+            "python.exe",
+            "bin/python",
+            "bin/python.exe",
         ]
         return self.service(
-            python_exes, "-c",
+            python_exes,
+            "-c",
             "import appose.python_worker; appose.python_worker.main()",
         )
 
@@ -103,23 +106,7 @@ class Environment:
         # Collect classpath elements into a set, to avoid duplicate entries.
         cp: Dict[str] = {}  # NB: Use dict instead of set to maintain insertion order.
 
-        # Ensure that the classpath includes Appose and its dependencies.
-        # NB: This list must match Appose's dependencies in pom.xml!
-        """
-        appose_deps = [
-            org.apposed.appose.GroovyWorker.class, # ------> org.apposed:appose
-            org.apache.groovy.util.ScriptRunner.class, # --> org.codehaus.groovy:groovy
-            groovy.json.JsonOutput.class, # ---------------> org.codehaus.groovy:groovy-json
-            org.apache.ivy.Ivy.class, # -------------------> org.apache.ivy:ivy
-            com.sun.jna.Pointer.class, # ------------------> com.sun.jna:jna
-            com.sun.jna.platform.linux.LibRT.class, # -----> com.sun.jna:jna-platform
-            com.sun.jna.platform.win32.Kernel32.class # ---> com.sun.jna:jna-platform
-        ]
-        for (dep_class in appose_deps):
-            location = location(dep_class)
-            if location is not None:
-                cp[str(location.absolute())] = None
-        """
+        # TODO: Ensure that the classpath includes Appose and its dependencies.
 
         # Append any explicitly requested classpath elements.
         for element in class_path:
@@ -136,9 +123,12 @@ class Environment:
 
         # Create the service.
         java_exes = [
-            "java", "java.exe",
-            "bin/java", "bin/java.exe",
-            "jre/bin/java", "jre/bin/java.exe",
+            "java",
+            "java.exe",
+            "bin/java",
+            "bin/java.exe",
+            "jre/bin/java",
+            "jre/bin/java.exe",
         ]
         return self.service(java_exes, *args)
 
@@ -180,7 +170,6 @@ class Environment:
 
 
 class Builder:
-
     def __init__(self):
         self.base_dir: Optional[Path] = None
         self.system_path: bool = False

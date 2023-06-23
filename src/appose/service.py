@@ -6,13 +6,13 @@
 # %%
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
+#
 # 1. Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 # IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -93,7 +93,7 @@ class Service:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             cwd=self._cwd,
-            text=True
+            text=True,
         )
         self._stdout_thread = threading.Thread(
             target=self._stdout_loop, name=f"{prefix}-Stdout"
@@ -216,7 +216,6 @@ class ResponseType(Enum):
 
 
 class TaskEvent:
-
     def __init__(self, task: "Task", response_type: ResponseType) -> None:
         self.task: "Task" = task
         self.response_type: ResponseType = response_type
@@ -331,7 +330,9 @@ class Task:
                 self.status = TaskStatus.FAILED
                 self.error = response.get("error")
             case _:
-                self.service._debug_service(f"Invalid service message type: {response_type}")
+                self.service._debug_service(
+                    f"Invalid service message type: {response_type}"
+                )
                 return
 
         event = TaskEvent(self, response_type)
