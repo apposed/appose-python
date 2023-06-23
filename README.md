@@ -28,16 +28,6 @@ This is the **Python implementation of Appose**.
 
 The name of the package is `appose`.
 
-### Conda/Mamba
-
-To use [the conda-forge package](https://anaconda.org/conda-forge/appose),
-add `appose` to your `environment.yml`'s `dependencies` section:
-
-```yaml
-dependencies:
-  - appose
-```
-
 ### PyPI/Pip
 
 To use [the PyPI package](https://pypi.org/project/appose),
@@ -53,6 +43,19 @@ If you are just starting out, we recommend using `pyproject.toml` (see
 dependencies = [
   "appose"
 ]
+```
+
+### Conda/Mamba
+
+*Note: Appose is not yet available from conda-forge.
+This section is aspirational.*
+
+To use [the conda-forge package](https://anaconda.org/conda-forge/appose),
+add `appose` to your `environment.yml`'s `dependencies` section:
+
+```yaml
+dependencies:
+  - appose
 ```
 
 ## Examples
