@@ -54,7 +54,7 @@ homepage = "https://github.com/apposed/appose-python"
 documentation = "https://github.com/apposed/appose-python/blob/main/README.md"
 source = "https://github.com/apposed/appose-python"
 download = "https://pypi.org/project/appose-python"
-tracker = "https://github.com/apposed/appose-python/issues"
+tracker = "https://github.com/apposed/appose/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

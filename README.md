@@ -129,3 +129,9 @@ with env.groovy() as groovy:
 
 Of course, the above examples could have been done all in one language. But
 hopefully they hint at the possibilities of easy cross-language integration.
+
+## Issue tracker
+
+All implementations of Appose use the same issue tracker:
+
+https://github.com/apposed/appose/issues
