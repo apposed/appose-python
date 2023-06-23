@@ -57,7 +57,7 @@ task.outputs["result"] = time
 
 
 def test_groovy():
-    env = appose.base(".").use_system_path().build()
+    env = appose.system()
     # FIXME: Resolve these dependencies in a better way.
     class_path = [
         "../appose-java/target/appose-0.1.0-SNAPSHOT.jar",
@@ -72,7 +72,7 @@ def test_groovy():
 
 
 def test_python():
-    env = appose.base(".").use_system_path().build()
+    env = appose.system()
     with env.python() as service:
         execute_and_assert(service, collatz_python)
 
