@@ -47,10 +47,6 @@ dependencies = [
 
 ### Conda/Mamba
 
-*Note: Appose is not yet available from conda-forge. See
-[conda-forge/staged-recipes#22904](https://github.com/conda-forge/staged-recipes/pull/22904)
-to follow the progress. In the meantime, this section is aspirational.*
-
 To use [the conda-forge package](https://anaconda.org/conda-forge/appose),
 add `appose` to your `environment.yml`'s `dependencies` section:
 
