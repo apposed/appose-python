@@ -232,6 +232,9 @@ class TaskEvent:
         self.task: "Task" = task
         self.response_type: ResponseType = response_type
 
+    def __str__(self):
+        return f"[{self.response_type}] {self.task}"
+
 
 # noinspection PyProtectedMember
 class Task:
@@ -354,3 +357,9 @@ class Task:
         if self.status.is_finished():
             with self.cv:
                 self.cv.notify_all()
+
+    def __str__(self):
+        return (
+            f"{self.uuid=}, {self.status=}, {self.message=}, "
+            f"{self.current=}, {self.maximum=}, {self.error=}"
+        )
