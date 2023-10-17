@@ -91,6 +91,7 @@ def execute_and_assert(service: Service, script: str):
     task.wait_for()
 
     # Validate the execution result.
+    assert TaskStatus.COMPLETE == task.status
     result = task.outputs["result"]
     assert 91 == result
 

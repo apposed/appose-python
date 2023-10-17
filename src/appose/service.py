@@ -61,6 +61,7 @@ class Service:
         self._process: Optional[subprocess.Popen] = None
         self._stdout_thread: Optional[threading.Thread] = None
         self._stderr_thread: Optional[threading.Thread] = None
+        self._monitor_thread: Optional[threading.Thread] = None
         self._debug_callback: Optional[Callable[[Any], Any]] = None
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
@@ -101,8 +102,12 @@ class Service:
         self._stderr_thread = threading.Thread(
             target=self._stderr_loop, name=f"{prefix}-Stderr"
         )
+        self._monitor_thread = threading.Thread(
+            target=self._monitor_loop, name=f"{prefix}-Monitor"
+        )
         self._stdout_thread.start()
         self._stderr_thread.start()
+        self._monitor_thread.start()
 
     def task(self, script: str, inputs: Optional[Args] = None) -> "Task":
         """
@@ -132,16 +137,16 @@ class Service:
         Input loop processing lines from the worker's stdout stream.
         """
         while True:
+            stdout = self._process.stdout
             # noinspection PyBroadException
             try:
-                line = self._process.stdout.readline()
+                line = None if stdout is None else stdout.readline()
             except Exception:
                 # Something went wrong reading the line. Panic!
                 self._debug_service(format_exc())
                 break
 
-            if line is None:
-                # pipe closed
+            if not line:  # readline returns empty string upon EOF
                 self._debug_service("<worker stdout closed>")
                 return
 
@@ -172,13 +177,33 @@ class Service:
         # noinspection PyBroadException
         try:
             while True:
-                line = self._process.stderr.readline()
-                if line is None:
+                stderr = self._process.stderr
+                line = None if stderr is None else stderr.readline()
+                if not line:  # readline returns empty string upon EOF
                     self._debug_service("<worker stderr closed>")
                     return
                 self._debug_worker(line)
         except Exception:
             self._debug_service(format_exc())
+
+    def _monitor_loop(self) -> None:
+        # Wait until the worker process terminates.
+        while self._process.wait(50) is None:
+            pass
+
+        # Do some sanity checks.
+        exit_code = self._process.returncode
+        if exit_code != 0:
+            self._debug_service(f"<worker process terminated with exit code {exit_code}>")
+        task_count = len(self._tasks)
+        if task_count > 0:
+            self._debug_service(f"<worker process terminated with {task_count} pending tasks>")
+
+        # Notify any remaining tasks about the process crash.
+        for task in self._tasks.values():
+            task._crash()
+
+        self._tasks.clear()
 
     def _debug_service(self, message: str) -> None:
         self._debug("SERVICE", message)
@@ -202,15 +227,17 @@ class TaskStatus(Enum):
     COMPLETE = "COMPLETE"
     CANCELED = "CANCELED"
     FAILED = "FAILED"
+    CRASHED = "CRASHED"
 
     def is_finished(self):
         """
-        True iff status is COMPLETE, CANCELED, or FAILED.
+        True iff status is COMPLETE, CANCELED, FAILED, or CRASHED.
         """
         return self in (
             TaskStatus.COMPLETE,
             TaskStatus.CANCELED,
             TaskStatus.FAILED,
+            TaskStatus.CRASHED,
         )
 
 
@@ -225,6 +252,7 @@ class ResponseType(Enum):
     COMPLETION = "COMPLETION"
     CANCELATION = "CANCELATION"
     FAILURE = "FAILURE"
+    CRASH = "CRASH"
 
 
 class TaskEvent:
@@ -357,6 +385,14 @@ class Task:
         if self.status.is_finished():
             with self.cv:
                 self.cv.notify_all()
+
+    def _crash(self):
+        event = TaskEvent(self, ResponseType.CRASH)
+        self.status = TaskStatus.CRASHED
+        for listener in self.listeners:
+            listener(event)
+        with self.cv:
+            self.cv.notify_all()
 
     def __str__(self):
         return (
