@@ -56,11 +56,17 @@ class Task:
     ) -> None:
         args = {}
         if message is not None:
-            args["message"] = message
+            args["message"] = str(message)
         if current is not None:
-            args["current"] = current
+            try:
+                args["current"] = int(current)
+            except ValueError:
+                pass
         if maximum is not None:
-            args["maximum"] = maximum
+            try:
+                args["maximum"] = int(maximum)
+            except ValueError:
+                pass
         self._respond(ResponseType.UPDATE, args)
 
     def cancel(self) -> None:
@@ -136,7 +142,17 @@ class Task:
         if args is not None:
             response.update(args)
         # NB: Flush is necessary to ensure service receives the data!
-        print(encode(response), flush=True)
+        try:
+            print(encode(response), flush=True)
+        except Exception:
+            # Encoding can fail due to unsupported types, when the response
+            # or its elements are not supported by JSON encoding.
+            # No matter what goes wrong, we want to tell the caller.
+            if response_type is ResponseType.FAILURE:
+                # TODO: How to address this hypothetical case
+                # of a failure message triggering another failure?
+                raise
+            self.fail(traceback.format_exc())
 
 
 def main() -> None:
