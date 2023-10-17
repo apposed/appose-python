@@ -131,15 +131,24 @@ class Service:
         """
         Input loop processing lines from the worker's stdout stream.
         """
-        # noinspection PyBroadException
-        try:
-            while True:
+        while True:
+            # noinspection PyBroadException
+            try:
                 line = self._process.stdout.readline()
-                self._debug_service("<worker stdout closed>" if line is None else line)
+            except Exception:
+                # Something went wrong reading the line. Panic!
+                self._debug_service(format_exc())
+                break
 
-                if line is None:
-                    return  # pipe closed
+            if line is None:
+                # pipe closed
+                self._debug_service("<worker stdout closed>")
+                return
+
+            # noinspection PyBroadException
+            try:
                 response = decode(line)
+                self._debug_service(line)  # Echo the line to the debug listener.
                 uuid = response.get("task")
                 if uuid is None:
                     self._debug_service("Invalid service message: {line}")
@@ -150,8 +159,11 @@ class Service:
                     continue
                 # noinspection PyProtectedMember
                 task._handle(response)
-        except Exception:
-            self._debug_service(format_exc())
+            except Exception:
+                # Something went wrong decoding the line of JSON.
+                # Skip it and keep going, but log it first.
+                self._debug_service(f"<INVALID> {line}")
+
 
     def _stderr_loop(self) -> None:
         """
