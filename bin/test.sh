@@ -24,15 +24,9 @@ then
     <dependency>
       <groupId>org.apposed</groupId>
       <artifactId>appose</artifactId>
-      <version>LATEST</version>
+      <version>RELEASE</version>
     </dependency>
   </dependencies>
-  <repositories>
-    <repository>
-      <id>scijava.public</id>
-      <url>https://maven.scijava.org/content/groups/public</url>
-    </repository>
-  </repositories>
 </project>' > appose.pom
   mvn -f appose.pom dependency:copy-dependencies
   rm appose.pom
