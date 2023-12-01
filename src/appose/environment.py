@@ -109,8 +109,9 @@ class Environment:
         # TODO: Ensure that the classpath includes Appose and its dependencies.
 
         # Append any explicitly requested classpath elements.
-        for element in class_path:
-            cp[element] = None
+        if class_path is not None:
+            for element in class_path:
+                cp[element] = None
 
         # Build up the service arguments.
         args = [
