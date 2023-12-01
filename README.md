@@ -64,12 +64,12 @@ import appose
 env = appose.java(vendor="zulu", version="17").build()
 with env.groovy() as groovy:
     task = groovy.task("5 + 6")
-    task.waitFor()
-    result = task.outputs.get("result")
+    task.wait_for()
+    result = task.outputs["result"]
     assert 11 == result
 ```
 
-*Note: The `Appose.java` builder is planned, but not yet implemented.*
+*Note: The `appose.java` builder is planned, but not yet implemented.*
 
 Here is an example using a few more of Appose's features:
 

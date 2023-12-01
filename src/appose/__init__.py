@@ -52,7 +52,7 @@ Here is a very simple example written in Python:
     Task task = groovy.task("""
         5 + 6
     """)
-    task.waitFor()
+    task.wait_for()
     result = task.outputs.get("result")
     assert 11 == result
 
@@ -103,7 +103,7 @@ And here is an example using a few more of Appose's features:
         # Task is taking too long; request a cancelation.
         task.cancel()
 
-    task.waitFor()
+    task.wait_for()
 
 Of course, the above examples could have been done all in Python. But
 hopefully they hint at the possibilities of easy cross-language integration.
