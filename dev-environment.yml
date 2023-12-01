@@ -1,9 +1,9 @@
 # Use this file to construct an environment
 # for developing appose from source.
 #
-# First, install mambaforge:
+# First, install miniforge:
 #
-#   https://github.com/conda-forge/miniforge#mambaforge
+#   https://github.com/conda-forge/miniforge
 #
 # Then run:
 #

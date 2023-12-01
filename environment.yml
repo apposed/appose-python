@@ -1,9 +1,9 @@
 # Use this file to construct an environment for
 # working with appose in a runtime setting.
 #
-# First, install mambaforge:
+# First, install miniforge:
 #
-#   https://github.com/conda-forge/miniforge#mambaforge
+#   https://github.com/conda-forge/miniforge
 #
 # Then run:
 #
