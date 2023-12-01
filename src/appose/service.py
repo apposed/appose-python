@@ -187,8 +187,7 @@ class Service:
 
     def _monitor_loop(self) -> None:
         # Wait until the worker process terminates.
-        while self._process.wait(50) is None:
-            pass
+        self._process.wait()
 
         # Do some sanity checks.
         exit_code = self._process.returncode
