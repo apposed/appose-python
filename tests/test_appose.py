@@ -70,6 +70,19 @@ def test_python():
         execute_and_assert(service, collatz_python)
 
 
+def test_service_startup_failure():
+    env = appose.base("no-java-to-be-found-here").build()
+    try:
+        with env.groovy():
+            raise AssertionError("Groovy worker process started successfully!?")
+    except ValueError as e:
+        assert (
+            "No executables found amongst candidates: "
+            "['java', 'java.exe', 'bin/java', 'bin/java.exe', "
+            "'jre/bin/java', 'jre/bin/java.exe']"
+        ) == str(e)
+
+
 def execute_and_assert(service: Service, script: str):
     task = service.task(script)
 
