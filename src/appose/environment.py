@@ -58,6 +58,7 @@ class Environment:
         """
         python_exes = [
             "python",
+            "python3",
             "python.exe",
             "bin/python",
             "bin/python.exe",
