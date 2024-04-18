@@ -51,6 +51,6 @@ def find_exe(dirs: Sequence[str], exes: Sequence[str]) -> Optional[Path]:
             # Candidate is a relative path; check beneath each given directory.
             for d in dirs:
                 f = Path(d) / exe
-                if can_execute(f):
+                if can_execute(f) and not f.is_dir():
                     return f
     return None
