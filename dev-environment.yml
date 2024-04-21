@@ -18,6 +18,7 @@ name: appose-dev
 channels:
   - conda-forge
   - defaults
+  - forklift
 dependencies:
   - python >= 3.10
   # Developer tools
