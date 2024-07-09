@@ -28,8 +28,8 @@
 ###
 
 import json
-from typing import Any, Dict
 from multiprocessing import shared_memory
+from typing import Any, Dict
 
 Args = Dict[str, Any]
 
@@ -43,30 +43,38 @@ def decode(the_json: str) -> Args:
 
 
 class ShmNDArray:
-
-    def __init__(self, shm: shared_memory.SharedMemory, dtype: str, shape ):
+    def __init__(self, shm: shared_memory.SharedMemory, dtype: str, shape):
         self.shm = shm
         self.dtype = dtype
         self.shape = shape
 
     def __str__(self):
-        return f"ShmNDArray(shm='{self.shm.name}' ({self.shm.size}), dtype='{self.dtype}', shape={self.shape})"
+        return (
+            f"ShmNDArray("
+            f"shm='{self.shm.name}' ({self.shm.size}), "
+            f"dtype='{self.dtype}', "
+            f"shape={self.shape})"
+        )
 
     def ndarray(self):
         try:
             import math
+
             import numpy
+
             num_elements = math.prod(self.shape)
-            return numpy.ndarray(num_elements, dtype=self.dtype, buffer=self.shm.buf).reshape(self.shape)
+            return numpy.ndarray(
+                num_elements, dtype=self.dtype, buffer=self.shm.buf
+            ).reshape(self.shape)
         except ModuleNotFoundError:
             raise ImportError("NumPy is not available.")
 
 
 def _appose_object_hook(obj: Dict):
-    type = obj.get('appose_type')
-    if type == 'shm':
-        return shared_memory.SharedMemory(name=(obj['name']), size=(obj['size']))
-    elif type == 'ndarray':
-        return ShmNDArray(obj['shm'], obj['dtype'], obj['shape'])
+    type = obj.get("appose_type")
+    if type == "shm":
+        return shared_memory.SharedMemory(name=(obj["name"]), size=(obj["size"]))
+    elif type == "ndarray":
+        return ShmNDArray(obj["shm"], obj["dtype"], obj["shape"])
     else:
         return obj
