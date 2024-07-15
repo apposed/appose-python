@@ -43,7 +43,20 @@ def decode(the_json: str) -> Args:
 
 
 class NDArray:
+    """
+    Data structure for a multi-dimensional array.
+    The array contains elements of a data type, arranged in
+    a particular shape, and flattened into SharedMemory.
+    """
+
     def __init__(self, shm: SharedMemory, dtype: str, shape):
+        """
+        Create an NDArray.
+        :param shm: The SharedMemory containing the array data.
+        :param dtype: The type of the data elements; e.g. int8, uint8, float32, float64.
+        :param shape: The dimensional extents; e.g. a stack of 7 image planes
+                      with resolution 512x512 would have shape [7, 512, 512].
+        """
         self.shm = shm
         self.dtype = dtype
         self.shape = shape
@@ -57,6 +70,11 @@ class NDArray:
         )
 
     def ndarray(self):
+        """
+        Create a NumPy ndarray object for working with the array data.
+        No array data is copied; the NumPy array wraps the same SharedMemory.
+        Requires the numpy package to be installed.
+        """
         try:
             import math
 
