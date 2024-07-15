@@ -29,7 +29,7 @@
 
 import json
 from multiprocessing.shared_memory import SharedMemory
-from typing import Any, Dict
+from typing import Any, Dict, Sequence
 
 Args = Dict[str, Any]
 
@@ -49,7 +49,7 @@ class NDArray:
     a particular shape, and flattened into SharedMemory.
     """
 
-    def __init__(self, shm: SharedMemory, dtype: str, shape):
+    def __init__(self, shm: SharedMemory, dtype: str, shape: Sequence[int]):
         """
         Create an NDArray.
         :param shm: The SharedMemory containing the array data.
