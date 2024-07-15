@@ -42,7 +42,7 @@ def decode(the_json: str) -> Args:
     return json.loads(the_json, object_hook=_appose_object_hook)
 
 
-class ShmNDArray:
+class NDArray:
     def __init__(self, shm: shared_memory.SharedMemory, dtype: str, shape):
         self.shm = shm
         self.dtype = dtype
@@ -50,7 +50,7 @@ class ShmNDArray:
 
     def __str__(self):
         return (
-            f"ShmNDArray("
+            f"NDArray("
             f"shm='{self.shm.name}' ({self.shm.size}), "
             f"dtype='{self.dtype}', "
             f"shape={self.shape})"
@@ -75,6 +75,6 @@ def _appose_object_hook(obj: Dict):
     if type == "shm":
         return shared_memory.SharedMemory(name=(obj["name"]), size=(obj["size"]))
     elif type == "ndarray":
-        return ShmNDArray(obj["shm"], obj["dtype"], obj["shape"])
+        return NDArray(obj["shm"], obj["dtype"], obj["shape"])
     else:
         return obj
