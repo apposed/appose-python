@@ -94,10 +94,10 @@ class NDArray:
 
 
 def _appose_object_hook(obj: Dict):
-    type = obj.get("appose_type")
-    if type == "shm":
+    atype = obj.get("appose_type")
+    if atype == "shm":
         return SharedMemory(name=(obj["name"]), size=(obj["size"]))
-    elif type == "ndarray":
+    elif atype == "ndarray":
         return NDArray(obj["dtype"], obj["shape"], obj["shm"])
     else:
         return obj
