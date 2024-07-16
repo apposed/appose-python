@@ -37,7 +37,7 @@ Args = Dict[str, Any]
 
 
 def encode(data: Args) -> str:
-    return json.dumps(data)
+    return json.dumps(data, separators=(",", ":"))
 
 
 def decode(the_json: str) -> Args:
