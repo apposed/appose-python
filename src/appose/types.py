@@ -37,7 +37,7 @@ Args = Dict[str, Any]
 
 
 def encode(data: Args) -> str:
-    return json.dumps(data, separators=(",", ":"))
+    return json.dumps(data, cls=_ApposeJSONEncoder, separators=(",", ":"))
 
 
 def decode(the_json: str) -> Args:
@@ -91,6 +91,24 @@ class NDArray:
             ).reshape(self.shape)
         except ModuleNotFoundError:
             raise ImportError("NumPy is not available.")
+
+
+class _ApposeJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, SharedMemory):
+            return {
+                "appose_type": "shm",
+                "name": obj.name,
+                "size": obj.size,
+            }
+        if isinstance(obj, NDArray):
+            return {
+                "appose_type": "ndarray",
+                "dtype": obj.dtype,
+                "shape": obj.shape,
+                "shm": obj.shm,
+            }
+        return super().default(obj)
 
 
 def _appose_object_hook(obj: Dict):
