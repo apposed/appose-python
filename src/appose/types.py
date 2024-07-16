@@ -28,8 +28,10 @@
 ###
 
 import json
+import re
+from math import ceil, prod
 from multiprocessing.shared_memory import SharedMemory
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Sequence, Union
 
 Args = Dict[str, Any]
 
@@ -49,24 +51,30 @@ class NDArray:
     a particular shape, and flattened into SharedMemory.
     """
 
-    def __init__(self, shm: SharedMemory, dtype: str, shape: Sequence[int]):
+    def __init__(self, dtype: str, shape: Sequence[int], shm: SharedMemory = None):
         """
         Create an NDArray.
-        :param shm: The SharedMemory containing the array data.
         :param dtype: The type of the data elements; e.g. int8, uint8, float32, float64.
         :param shape: The dimensional extents; e.g. a stack of 7 image planes
                       with resolution 512x512 would have shape [7, 512, 512].
+        :param shm: The SharedMemory containing the array data, or None to create it.
         """
-        self.shm = shm
         self.dtype = dtype
         self.shape = shape
+        self.shm = (
+            SharedMemory(
+                create=True, size=ceil(prod(shape) * _bytes_per_element(dtype))
+            )
+            if shm is None
+            else shm
+        )
 
     def __str__(self):
         return (
             f"NDArray("
-            f"shm='{self.shm.name}' ({self.shm.size}), "
             f"dtype='{self.dtype}', "
-            f"shape={self.shape})"
+            f"shape={self.shape}, "
+            f"shm='{self.shm.name}' ({self.shm.size}))"
         )
 
     def ndarray(self):
@@ -76,13 +84,10 @@ class NDArray:
         Requires the numpy package to be installed.
         """
         try:
-            import math
-
             import numpy
 
-            num_elements = math.prod(self.shape)
             return numpy.ndarray(
-                num_elements, dtype=self.dtype, buffer=self.shm.buf
+                prod(self.shape), dtype=self.dtype, buffer=self.shm.buf
             ).reshape(self.shape)
         except ModuleNotFoundError:
             raise ImportError("NumPy is not available.")
@@ -93,6 +98,14 @@ def _appose_object_hook(obj: Dict):
     if type == "shm":
         return SharedMemory(name=(obj["name"]), size=(obj["size"]))
     elif type == "ndarray":
-        return NDArray(obj["shm"], obj["dtype"], obj["shape"])
+        return NDArray(obj["dtype"], obj["shape"], obj["shm"])
     else:
         return obj
+
+
+def _bytes_per_element(dtype: str) -> Union[int, float]:
+    try:
+        bits = int(re.sub("[^0-9]", "", dtype))
+    except ValueError:
+        raise ValueError(f"Invalid dtype: {dtype}")
+    return bits / 8
