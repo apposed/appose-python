@@ -1,4 +1,5 @@
 import unittest
+from multiprocessing.shared_memory import SharedMemory
 
 import appose
 
@@ -18,7 +19,19 @@ class TypesTest(unittest.TestCase):
         "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz"
         '~!@#$%^&*()",'
         '"numbers":[1,1,2,3,5,8],'
-        '"words":["quick","brown","fox"]'
+        '"words":["quick","brown","fox"],'
+        # fmt: off
+        '"ndArray":{'
+            '"appose_type":"ndarray",'  # noqa: E131
+            '"dtype":"float32",'        # noqa: E131
+            '"shape":[2,20,25],'        # noqa: E131
+            '"shm":{'                   # noqa: E131
+                '"appose_type":"shm",'  # noqa: E131
+                '"name":"SHM_NAME",'    # noqa: E131
+                '"size":4000'           # noqa: E131
+            "}"                         # noqa: E131
+        "}"
+        # fmt: on
         "}"
     )
 
@@ -53,14 +66,21 @@ class TypesTest(unittest.TestCase):
             "numbers": self.NUMBERS,
             "words": self.WORDS,
         }
+        ndarray = appose.types.NDArray("float32", [2, 20, 25])
+        shm_name = ndarray.shm.name
+        data["ndArray"] = ndarray
         json_str = appose.types.encode(data)
         self.assertIsNotNone(json_str)
-        self.assertEqual(self.JSON, json_str)
+        expected = self.JSON.replace("SHM_NAME", shm_name)
+        self.assertEqual(expected, json_str)
+        ndarray.shm.unlink()
 
     def test_decode(self):
-        data = appose.types.decode(self.JSON)
+        shm = SharedMemory(create=True, size=4000)
+        shm_name = shm.name
+        data = appose.types.decode(self.JSON.replace("SHM_NAME", shm_name))
         self.assertIsNotNone(data)
-        self.assertEqual(18, len(data))
+        self.assertEqual(19, len(data))
         self.assertEqual(123, data["posByte"])
         self.assertEqual(-98, data["negByte"])
         self.assertEqual(9.876543210123456, data["posDouble"])
@@ -79,3 +99,7 @@ class TypesTest(unittest.TestCase):
         self.assertEqual(self.STRING, data["aString"])
         self.assertEqual(self.NUMBERS, data["numbers"])
         self.assertEqual(self.WORDS, data["words"])
+        ndArray = data["ndArray"]
+        self.assertEqual("float32", ndArray.dtype)
+        self.assertEqual([2, 20, 25], ndArray.shape)
+        shm.unlink()
