@@ -1,5 +1,4 @@
 import unittest
-from multiprocessing.shared_memory import SharedMemory
 
 import appose
 
@@ -66,7 +65,7 @@ class TypesTest(unittest.TestCase):
             "numbers": self.NUMBERS,
             "words": self.WORDS,
         }
-        ndarray = appose.types.NDArray("float32", [2, 20, 25])
+        ndarray = appose.NDArray("float32", [2, 20, 25])
         shm_name = ndarray.shm.name
         data["ndArray"] = ndarray
         json_str = appose.types.encode(data)
@@ -76,7 +75,7 @@ class TypesTest(unittest.TestCase):
         ndarray.shm.unlink()
 
     def test_decode(self):
-        shm = SharedMemory(create=True, size=4000)
+        shm = appose.SharedMemory(create=True, size=4000)
         shm_name = shm.name
         data = appose.types.decode(self.JSON.replace("SHM_NAME", shm_name))
         self.assertIsNotNone(data)

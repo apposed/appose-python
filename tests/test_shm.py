@@ -27,11 +27,8 @@
 # #L%
 ###
 
-from multiprocessing.shared_memory import SharedMemory
-
 import appose
 from appose.service import TaskStatus
-from appose.types import NDArray
 
 ndarray_inspect = """
 task.outputs["size"] = data.shm.size
@@ -45,11 +42,11 @@ def test_ndarray():
     env = appose.system()
     with env.python() as service:
         # Construct the data.
-        shm = SharedMemory(create=True, size=2 * 2 * 20 * 25)
+        shm = appose.SharedMemory(create=True, size=2 * 2 * 20 * 25)
         shm.buf[0] = 123
         shm.buf[456] = 78
         shm.buf[1999] = 210
-        data = NDArray("uint16", [2, 20, 25], shm)
+        data = appose.NDArray("uint16", [2, 20, 25], shm)
 
         # Run the task.
         task = service.task(ndarray_inspect, {"data": data})
