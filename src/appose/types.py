@@ -30,11 +30,63 @@
 import json
 import re
 from math import ceil, prod
-from multiprocessing import resource_tracker
-from multiprocessing.shared_memory import SharedMemory
+from multiprocessing import resource_tracker, shared_memory
 from typing import Any, Dict, Sequence, Union
 
 Args = Dict[str, Any]
+
+
+class SharedMemory(shared_memory.SharedMemory):
+    """
+    An enhanced version of Python's multiprocessing.shared_memory.SharedMemory
+    class which can be used with a `with` statement. When the program flow
+    exits the `with` block, this class's `dispose()` method will be invoked,
+    which might call `close()` or `unlink()` depending on the value of its
+    `unlink_on_dispose` flag.
+    """
+
+    def __init__(self, name: str = None, create: bool = False, size: int = 0):
+        super().__init__(name=name, create=create, size=size)
+        self._unlink_on_dispose = create
+        if _is_worker:
+            # HACK: Remove this shared memory block from the resource_tracker,
+            # which wants to clean up shared memory blocks after all known
+            # references are done using them.
+            #
+            # There is one resource_tracker per Python process, and they will
+            # each try to delete shared memory blocks known to them when they
+            # are shutting down, even when other processes still need them.
+            #
+            # As such, the rule Appose follows is: let the service process
+            # always handle cleanup of shared memory blocks, regardless of
+            # which process initially allocated it.
+            resource_tracker.unregister(self._name, "shared_memory")
+
+    def unlink_on_dispose(self, value: bool) -> None:
+        """
+        Set whether the `unlink()` method should be invoked to destroy
+        the shared memory block when the `dispose()` method is called.
+
+        Note: dispose() is the method called when exiting a `with` block.
+
+        By default, shared memory objects constructed with `create=True`
+        will behave this way, whereas shared memory objects constructed
+        with `create=False` will not. But this method allows to override
+        the behavior.
+        """
+        self._unlink_on_dispose = value
+
+    def dispose(self) -> None:
+        if self._unlink_on_dispose:
+            self.unlink()
+        else:
+            self.close()
+
+    def __enter__(self) -> "SharedMemory":
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb) -> None:
+        self.dispose()
 
 
 def encode(data: Args) -> str:
@@ -63,7 +115,9 @@ class NDArray:
         self.dtype = dtype
         self.shape = shape
         self.shm = (
-            _create_shm(create=True, size=ceil(prod(shape) * _bytes_per_element(dtype)))
+            SharedMemory(
+                create=True, size=ceil(prod(shape) * _bytes_per_element(dtype))
+            )
             if shm is None
             else shm
         )
@@ -91,6 +145,12 @@ class NDArray:
         except ModuleNotFoundError:
             raise ImportError("NumPy is not available.")
 
+    def __enter__(self) -> "NDArray":
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb) -> None:
+        self.shm.dispose()
+
 
 class _ApposeJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -114,7 +174,7 @@ def _appose_object_hook(obj: Dict):
     atype = obj.get("appose_type")
     if atype == "shm":
         # Attach to existing shared memory block.
-        return _create_shm(name=(obj["name"]), size=(obj["size"]))
+        return SharedMemory(name=(obj["name"]), size=(obj["size"]))
     elif atype == "ndarray":
         return NDArray(obj["dtype"], obj["shape"], obj["shm"])
     else:
@@ -127,23 +187,6 @@ def _bytes_per_element(dtype: str) -> Union[int, float]:
     except ValueError:
         raise ValueError(f"Invalid dtype: {dtype}")
     return bits / 8
-
-
-def _create_shm(name: str = None, create: bool = False, size: int = 0):
-    shm = SharedMemory(name=name, create=create, size=size)
-    if _is_worker:
-        # HACK: Disable this process's resource_tracker, which wants to clean up
-        # shared memory blocks after all known references are done using them.
-        #
-        # There is one resource_tracker per Python process, and they will each
-        # try to delete shared memory blocks known to them when they are
-        # shutting down, even when other processes still need them.
-        #
-        # As such, the rule Appose follows is: let the service process always
-        # do the cleanup of shared memory blocks, regardless of which process
-        # initially allocated it.
-        resource_tracker.unregister(shm._name, "shared_memory")
-    return shm
 
 
 _is_worker = False
