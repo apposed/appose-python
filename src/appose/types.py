@@ -30,6 +30,7 @@
 import json
 import re
 from math import ceil, prod
+from multiprocessing import resource_tracker
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, Sequence, Union
 
@@ -62,9 +63,7 @@ class NDArray:
         self.dtype = dtype
         self.shape = shape
         self.shm = (
-            SharedMemory(
-                create=True, size=ceil(prod(shape) * _bytes_per_element(dtype))
-            )
+            _create_shm(create=True, size=ceil(prod(shape) * _bytes_per_element(dtype)))
             if shm is None
             else shm
         )
@@ -114,7 +113,8 @@ class _ApposeJSONEncoder(json.JSONEncoder):
 def _appose_object_hook(obj: Dict):
     atype = obj.get("appose_type")
     if atype == "shm":
-        return SharedMemory(name=(obj["name"]), size=(obj["size"]))
+        # Attach to existing shared memory block.
+        return _create_shm(name=(obj["name"]), size=(obj["size"]))
     elif atype == "ndarray":
         return NDArray(obj["dtype"], obj["shape"], obj["shm"])
     else:
@@ -127,3 +127,28 @@ def _bytes_per_element(dtype: str) -> Union[int, float]:
     except ValueError:
         raise ValueError(f"Invalid dtype: {dtype}")
     return bits / 8
+
+
+def _create_shm(name: str = None, create: bool = False, size: int = 0):
+    shm = SharedMemory(name=name, create=create, size=size)
+    if _is_worker:
+        # HACK: Disable this process's resource_tracker, which wants to clean up
+        # shared memory blocks after all known references are done using them.
+        #
+        # There is one resource_tracker per Python process, and they will each
+        # try to delete shared memory blocks known to them when they are
+        # shutting down, even when other processes still need them.
+        #
+        # As such, the rule Appose follows is: let the service process always
+        # do the cleanup of shared memory blocks, regardless of which process
+        # initially allocated it.
+        resource_tracker.unregister(shm._name, "shared_memory")
+    return shm
+
+
+_is_worker = False
+
+
+def _set_worker(value: bool) -> None:
+    global _is_worker
+    _is_worker = value

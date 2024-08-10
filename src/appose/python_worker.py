@@ -46,7 +46,7 @@ from typing import Optional
 
 # NB: Avoid relative imports so that this script can be run standalone.
 from appose.service import RequestType, ResponseType
-from appose.types import Args, decode, encode
+from appose.types import Args, _set_worker, decode, encode
 
 
 class Task:
@@ -163,6 +163,8 @@ class Task:
 
 
 def main() -> None:
+    _set_worker(True)
+
     tasks = {}
 
     while True:
