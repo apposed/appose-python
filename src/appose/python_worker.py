@@ -87,7 +87,6 @@ class Task:
         def execute_script():
             # Populate script bindings.
             binding = {"task": self}
-            # TODO: Magically convert shared memory image inputs.
             if inputs is not None:
                 binding.update(inputs)
 
@@ -190,8 +189,6 @@ def main() -> None:
             case RequestType.CANCEL:
                 task = tasks.get(uuid)
                 if task is None:
-                    # TODO: proper logging
-                    # Maybe should stdout the error back to Appose calling process.
                     print(f"No such task: {uuid}", file=sys.stderr)
                     continue
                 task.cancel_requested = True
