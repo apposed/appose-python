@@ -134,6 +134,7 @@ JSON, one line per request/response.
 from pathlib import Path
 
 from .environment import Builder, Environment
+from .types import NDArray, SharedMemory  # noqa: F401
 
 
 def base(directory: Path) -> Builder:

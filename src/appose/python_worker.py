@@ -28,7 +28,14 @@
 ###
 
 """
-TODO
+The Appose worker for running Python scripts.
+
+Like all Appose workers, this program conforms to the Appose worker process
+contract, meaning it accepts requests on stdin and produces responses on
+stdout, both formatted according to Appose's assumptions.
+
+For details, see the Appose README:
+https://github.com/apposed/appose/blob/-/README.md#workers
 """
 
 import ast
@@ -39,7 +46,7 @@ from typing import Optional
 
 # NB: Avoid relative imports so that this script can be run standalone.
 from appose.service import RequestType, ResponseType
-from appose.types import Args, decode, encode
+from appose.types import Args, _set_worker, decode, encode
 
 
 class Task:
@@ -80,7 +87,6 @@ class Task:
         def execute_script():
             # Populate script bindings.
             binding = {"task": self}
-            # TODO: Magically convert shared memory image inputs.
             if inputs is not None:
                 binding.update(inputs)
 
@@ -156,6 +162,8 @@ class Task:
 
 
 def main() -> None:
+    _set_worker(True)
+
     tasks = {}
 
     while True:
@@ -181,8 +189,6 @@ def main() -> None:
             case RequestType.CANCEL:
                 task = tasks.get(uuid)
                 if task is None:
-                    # TODO: proper logging
-                    # Maybe should stdout the error back to Appose calling process.
                     print(f"No such task: {uuid}", file=sys.stderr)
                     continue
                 task.cancel_requested = True
