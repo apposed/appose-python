@@ -28,7 +28,14 @@
 ###
 
 """
-TODO
+The Appose worker for running Python scripts.
+
+Like all Appose workers, this program conforms to the Appose worker process
+contract, meaning it accepts requests on stdin and produces responses on
+stdout, both formatted according to Appose's assumptions.
+
+For details, see the Appose README:
+https://github.com/apposed/appose/blob/-/README.md#workers
 """
 
 import ast
