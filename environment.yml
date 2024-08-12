@@ -18,7 +18,6 @@
 name: appose
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - python >= 3.10
   # Project from source
