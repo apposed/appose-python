@@ -32,6 +32,7 @@ TODO
 """
 
 import os
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
 
@@ -171,7 +172,18 @@ class Environment:
         return Service(self.base, all_args)
 
 
+class BuildHandler(ABC):
+    @abstractmethod
+    def include(self, content: str, scheme: Optional[str]) -> bool:
+        pass
+
+    @abstractmethod
+    def channel(self, name: str, location: Optional[str]) -> bool:
+        pass
+
+
 class Builder:
+
     def __init__(self):
         self.base_dir: Optional[Path] = None
         self.system_path: bool = False
@@ -179,12 +191,20 @@ class Builder:
         self.java_vendor: Optional[str] = None
         self.java_version: Optional[str] = None
 
+        self.handlers = []
+        for entry_point in entry_points(group='appose.build-handlers'):
+            handler_class = entry_point.load()
+            self.handlers.append(handler_class())
+
     def build(self):
         # TODO: Build the thing!
         # Hash the state to make a base directory name.
         # - Construct conda environment from condaEnvironmentYaml.
         # - Download and unpack JVM of the given vendor+version.
         # - Populate ${baseDirectory}/jars with Maven artifacts?
+
+        for handler in self.handlers:
+            handler.include("myContent", "myScheme");
         return Environment(self.base_dir, self.system_path)
 
     def use_system_path(self) -> "Builder":

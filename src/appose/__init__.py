@@ -45,7 +45,7 @@ The steps for using Appose are:
 Here is a very simple example written in Python:
 
     import appose
-    env = appose.java(vendor="zulu", version="17").build()
+    env = appose.java(version="17").build()
     groovy = env.groovy()
     Task task = groovy.task("""
         5 + 6
@@ -59,7 +59,7 @@ And here is an example using a few more of Appose's features:
     import appose
     from time import sleep
 
-    env = appose.java(vendor="zulu", version="17").build()
+    env = appose.java(version="17").build()
     groovy = env.groovy()
     task = groovy.task("""
         // Approximate the golden ratio using the Fibonacci sequence.
