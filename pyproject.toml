@@ -49,6 +49,12 @@ dev = [
     "validate-pyproject[all]",
 ]
 
+[project.entry-points.appose.build-handlers]
+jdk = "appose.jdk:JDKHandler"
+mamba = "appose.mamba:MambaHandler"
+maven = "appose.maven:MavenHandler"
+pixi = "appose.pixi:PixiHandler"
+
 [project.urls]
 homepage = "https://github.com/apposed/appose-python"
 documentation = "https://github.com/apposed/appose-python/blob/main/README.md"
