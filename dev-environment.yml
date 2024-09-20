@@ -23,12 +23,12 @@ dependencies:
   # Developer tools
   - autopep8
   - black
-  - build
   - flake8
   - flake8-pyproject
   - flake8-typing-imports
   - isort
   - pytest
+  - python-build
   - toml
   # Project from source
   - pip
