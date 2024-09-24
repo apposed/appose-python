@@ -185,18 +185,200 @@ class BuildHandler(ABC):
 class Builder:
 
     def __init__(self):
-        self.base_dir: Optional[Path] = None
-        self.system_path: bool = False
-        self.conda_environment_yaml: Optional[Path] = None
-        self.java_vendor: Optional[str] = None
-        self.java_version: Optional[str] = None
+        self.config: dict[str, list[str]] = {}
+        self.progress_subscribers = []
+        self.output_subscribers = []
+        self.error_subscribers = []
+
+        self.include_system_path = False
+        self.scheme = "conda"
 
         self.handlers = []
         for entry_point in entry_points(group='appose.build-handlers'):
             handler_class = entry_point.load()
             self.handlers.append(handler_class())
 
-    def build(self):
+    def subscribe_progress(self, subscriber) -> "Builder":
+        """
+        Register a callback method to be invoked when progress happens
+        during environment building.
+
+        :param subscriber: Party to inform when build progress happens.
+        :return: This Builder instance, for fluent-style programming.
+        """
+        progress_subscribers.add(subscriber)
+        return self
+
+    def subscribe_output(self, subscriber) -> "Builder":
+        """
+        Register a callback method to be invoked to report
+        output messages during environment building.
+
+        :param subscriber: Party to inform when output happens.
+        :return: This Builder instance, for fluent-style programming.
+        """
+        output_subscribers.add(subscriber)
+        return self
+
+    def subscribe_error(self, subscriber) -> "Builder":
+        """
+        Register a callback method to be invoked to report
+        error messages during environment building.
+
+        :param subscriber: Party to inform when errors happen.
+        :return: This Builder instance, for fluent-style programming.
+        """
+        error_subscribers.add(subscriber)
+        return self
+
+    def log_debug(self) -> "Builder":
+        """
+        Shorthand for subscribeProgress, subscribeOutput, and
+        subscribeError calls registering subscribers that emit their
+        arguments to stdout. Useful for debugging environment
+        construction, e.g. complex environments with many conda packages.
+        
+        :return: This {@code Builder} instance, for fluent-style programming.
+        """
+        reset = "\u001b[0m";
+        yellow = "\u001b[0;33m";
+        red = "\u001b[0;31m";
+        return subscribeProgress(
+            lambda title, cur, max: printf("%s: %d/%d\n", title, cur, max)
+        ).subscribeOutput(
+            lambda msg: printf("%s%s%s", yellow, "." if msg.isEmpty() else msg, reset)
+        ).subscribeError(
+            lambda msg: printf("%s%s%s", red, "." if msg.isEmpty() else msg, reset)
+        )
+
+    def use_system_path(self) -> "Builder":
+        self.include_system_path = True
+        return self
+
+
+    def scheme(scheme: str) -> "Builder":
+        """
+        Set the scheme to use with subsequent channel(name) and
+        include(content) directives.
+
+        :param scheme: TODO
+        :return: This Builder instance, for fluent-style programming.
+        """
+        self.scheme = scheme;
+        return this;
+
+    def file(file_or_path: Union[str, Path], scheme: str = None) -> "Builder":
+        """
+        TODO
+        
+        @return This {@code Builder} instance, for fluent-style programming.
+        """
+        return file(new File(filePath), scheme);
+    }
+
+    def file(file: Path) -> "Builder":
+        """
+        TODO
+        
+        @return This {@code Builder} instance, for fluent-style programming.
+        """
+        return file(file, file.getName());
+    }
+
+    def file(file: Path, scheme: str) -> "Builder":
+        """
+        TODO
+        
+        @return This {@code Builder} instance, for fluent-style programming.
+        """
+        byte[] bytes = Files.readAllBytes(file.toPath());
+        return include(new String(bytes), scheme);
+    }
+
+    def channel(name: str) -> "Builder":
+        """
+        Register a channel that provides components of the environment,
+        according to the currently configured scheme ("conda" by default).
+        <p>
+        For example, {@code channel("bioconda")} registers the {@code bioconda}
+        channel as a source for conda packages.
+        </p>
+        
+        @param name The name of the channel to register.
+        @return This {@code Builder} instance, for fluent-style programming.
+        @see #channel(String, String)
+        @see #scheme(String)
+        """
+        return channel(name, scheme);
+    }
+
+    def channel(name: str, location: str) -> "Builder":
+        """
+        Register a channel that provides components of the environment.
+        How to specify a channel is implementation-dependent. Examples:
+        
+        <ul>
+          <li>{@code channel("bioconda")} -
+            to register the {@code bioconda} channel as a source for conda packages.</li>
+          <li>{@code channel("scijava", "maven:https://maven.scijava.org/content/groups/public")} -
+            to register the SciJava Maven repository as a source for Maven artifacts.</li>
+        </ul>
+        
+        @param name The name of the channel to register.
+        @param location The location of the channel (e.g. a URI), or {@code null} if the
+                         name alone is sufficient to unambiguously identify the channel.
+        @return This {@code Builder} instance, for fluent-style programming.
+        @throws IllegalArgumentException if the channel is not understood by any of the available build handlers.
+        """
+        # Pass the channel directive to all handlers.
+        if handle(lambda handler: handler.channel(name, location)): return this
+        # None of the handlers accepted the directive.
+        raise ValueError(f"Unsupported channel: {name} {'' if location is None else '='}{location}")
+
+    def include(content: str, scheme: str = None) -> "Builder":
+        """
+        Register content to be included within the environment.
+        How to specify the content is implementation-dependent. Examples:
+        <ul>
+          <li>{@code include("cowsay", "pypi")} -
+            Install {@code cowsay} from the Python package index.</li>
+          <li>{@code include("openjdk=17")} -
+            Install {@code openjdk} version 17 from conda-forge.</li>
+          <li>{@code include("bioconda::sourmash")} -
+            Specify a conda channel explicitly using environment.yml syntax.</li>
+          <li>{@code include("org.scijava:parsington", "maven")} -
+            Install the latest version of Parsington from Maven Central.</li>
+          <li>{@code include("org.scijava:parsington:2.0.0", "maven")} -
+            Install Parsington 2.0.0 from Maven Central.</li>
+          <li>{@code include("sc.fiji:fiji", "maven")} -
+            Install the latest version of Fiji from registered Maven repositories.</li>
+          <li>{@code include("zulu:17", "jdk")} -
+            Install version 17 of Azul Zulu OpenJDK.</li>
+          <li>{@code include(yamlString, "environment.yml")} -
+            Provide the literal contents of a conda {@code environment.yml} file,
+            indicating a set of packages to include.
+        </ul>
+        <p>
+        Note that content is not actually fetched or installed until
+        {@link #build} is called at the end of the builder chain.
+        </p>
+        
+        @param content The content (e.g. a package name, or perhaps the contents of an environment
+                        configuration file) to include in the environment, fetching if needed.
+        @param scheme The type of content, which serves as a hint for how to interpret
+                       the content in some scenarios; see above for examples.
+        @return This {@code Builder} instance, for fluent-style programming.
+        @throws IllegalArgumentException if the include directive is not understood by any of the available build handlers.
+        """
+        # Pass the include directive to all handlers.
+        if (handle(handler -> handler.include(content, scheme))) return this;
+        # None of the handlers accepted the directive.
+        raise ValueError(f"Unsupported '{scheme}' content: {content}");
+
+
+
+
+    def build(self, ):
         # TODO: Build the thing!
         # Hash the state to make a base directory name.
         # - Construct conda environment from condaEnvironmentYaml.
@@ -206,10 +388,6 @@ class Builder:
         for handler in self.handlers:
             handler.include("myContent", "myScheme");
         return Environment(self.base_dir, self.system_path)
-
-    def use_system_path(self) -> "Builder":
-        self.system_path = True
-        return self
 
     def base(self, directory: Path) -> "Builder":
         self.base_dir: Path = directory
