@@ -221,16 +221,29 @@ from .environment import Builder, Environment
 from .types import NDArray, SharedMemory  # noqa: F401
 
 
-def base(directory: Path) -> Builder:
-    return Builder().base(directory)
+def scheme(scheme: str) -> Builder:
+    return Builder().scheme(scheme)
 
 
-def java(vendor: str, version: str) -> Builder:
-    return Builder().java(vendor=vendor, version=version)
+def file(file_path: Path, scheme: str = None) -> Builder:
+    return Builder().scheme(scheme)
+
+
+def channel(name: str, location: str = None) -> Builder:
+    return Builder().channel(name, location)
+
+
+def include(content: str, scheme: str = None) -> Builder:
+    return Builder().include(name, scheme)
 
 
 def conda(environment_yaml: Path) -> Builder:
-    return Builder().conda(environment_yaml=environment_yaml)
+    """ Deprecated! """
+    return file(environment_yaml, "environment.yml")
+
+
+def build(directory: Path) -> Environment:
+    return new Builder().build(directory)
 
 
 def system(directory: Path = Path(".")) -> Environment:
