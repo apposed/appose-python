@@ -42,6 +42,7 @@ import ast
 import sys
 import traceback
 from threading import Thread
+from time import sleep
 from typing import Optional
 
 # NB: Avoid relative imports so that this script can be run standalone.
@@ -53,6 +54,7 @@ class Task:
     def __init__(self, uuid: str) -> None:
         self.uuid = uuid
         self.outputs = {}
+        self.finished = False
         self.cancel_requested = False
 
     def update(
@@ -131,10 +133,10 @@ class Task:
 
             self._report_completion()
 
-        # TODO: Consider whether to retain a reference to this Thread, and
-        # expose a "force" option for cancelation that kills it forcibly; see:
-        # https://www.geeksforgeeks.org/python-different-ways-to-kill-a-thread/
-        Thread(target=execute_script, name=f"Appose-{self.uuid}").start()
+        # Create a thread and save a reference to it, in case its script
+        # ends up killing the thread. This happens e.g. if it calls sys.exit.
+        self.thread = Thread(target=execute_script, name=f"Appose-{self.uuid}")
+        self.thread.start()
 
     def _report_launch(self) -> None:
         self._respond(ResponseType.LAUNCH, None)
@@ -144,6 +146,15 @@ class Task:
         self._respond(ResponseType.COMPLETION, args)
 
     def _respond(self, response_type: ResponseType, args: Optional[Args]) -> None:
+        already_terminated = False
+        if response_type.is_terminal():
+            if self.finished:
+                # This is not the first terminal response. Let's
+                # remember, in case an exception is generated below,
+                # so that we can avoid infinite recursion loops.
+                already_terminated = True
+            self.finished = True
+
         response = {"task": self.uuid, "responseType": response_type.value}
         if args is not None:
             response.update(args)
@@ -151,13 +162,14 @@ class Task:
         try:
             print(encode(response), flush=True)
         except Exception:
-            # Encoding can fail due to unsupported types, when the response
-            # or its elements are not supported by JSON encoding.
+            if already_terminated:
+                # An exception triggered a failure response which
+                # then triggered another exception. Let's stop here
+                # to avoid the risk of infinite recursion loops.
+                return
+            # Encoding can fail due to unsupported types, when the
+            # response or its elements are not supported by JSON encoding.
             # No matter what goes wrong, we want to tell the caller.
-            if response_type is ResponseType.FAILURE:
-                # TODO: How to address this hypothetical case
-                # of a failure message triggering another failure?
-                raise
             self.fail(traceback.format_exc())
 
 
@@ -165,6 +177,24 @@ def main() -> None:
     _set_worker(True)
 
     tasks = {}
+    running = True
+
+    def cleanup_threads():
+        while running:
+            sleep(0.05)
+            dead = {
+                uuid: task
+                for uuid, task in tasks.items()
+                if not task.thread.is_alive()
+            }
+            for uuid, task in dead.items():
+                tasks.pop(uuid)
+                if not task.finished:
+                    # The task died before reporting a terminal status.
+                    # We report this situation as failure by thread death.
+                    task.fail("thread death")
+
+    Thread(target=cleanup_threads, name="Appose-Janitor").start()
 
     while True:
         try:
@@ -192,6 +222,8 @@ def main() -> None:
                     print(f"No such task: {uuid}", file=sys.stderr)
                     continue
                 task.cancel_requested = True
+
+    running = False
 
 
 if __name__ == "__main__":

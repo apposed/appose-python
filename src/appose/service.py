@@ -256,6 +256,17 @@ class ResponseType(Enum):
     FAILURE = "FAILURE"
     CRASH = "CRASH"
 
+    """
+    True iff response type is COMPLETE, CANCELED, FAILED, or CRASHED.
+    """
+    def is_terminal(self):
+        return self in (
+            ResponseType.COMPLETION,
+            ResponseType.CANCELATION,
+            ResponseType.FAILURE,
+            ResponseType.CRASH,
+        )
+
 
 class TaskEvent:
     def __init__(self, task: "Task", response_type: ResponseType) -> None:
