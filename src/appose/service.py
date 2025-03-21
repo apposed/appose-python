@@ -259,6 +259,7 @@ class ResponseType(Enum):
     """
     True iff response type is COMPLETE, CANCELED, FAILED, or CRASHED.
     """
+
     def is_terminal(self):
         return self in (
             ResponseType.COMPLETION,
