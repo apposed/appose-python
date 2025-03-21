@@ -113,7 +113,14 @@ class Task:
                     # Last statement of the script looks like an expression. Evaluate!
                     last = ast.Expression(block.body.pop().value)
 
-                _globals = {}
+                # NB: When `exec` gets two separate objects as *globals* and
+                # *locals*, the code will be executed as if it were embedded in
+                # a class definition. This means functions and classes defined
+                # in the executed code will not be able to access variables
+                # assigned at the top level, because the "top level" variables
+                # are treated as class variables in a class definition.
+                # See: https://docs.python.org/3/library/functions.html#exec
+                _globals = binding
                 exec(compile(block, "<string>", mode="exec"), _globals, binding)
                 if last is not None:
                     result = eval(
@@ -183,9 +190,7 @@ def main() -> None:
         while running:
             sleep(0.05)
             dead = {
-                uuid: task
-                for uuid, task in tasks.items()
-                if not task.thread.is_alive()
+                uuid: task for uuid, task in tasks.items() if not task.thread.is_alive()
             }
             for uuid, task in dead.items():
                 tasks.pop(uuid)
