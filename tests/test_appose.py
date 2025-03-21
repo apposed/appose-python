@@ -55,6 +55,13 @@ while v != 1:
 task.outputs["result"] = time
 """
 
+sqrt_import = """
+from math import sqrt
+def sqrt_age(age):
+    return sqrt(age)
+task.outputs["result"] = sqrt_age(age)
+"""
+
 
 def test_groovy():
     env = appose.system()
@@ -81,6 +88,16 @@ def test_service_startup_failure():
             "['java', 'java.exe', 'bin/java', 'bin/java.exe', "
             "'jre/bin/java', 'jre/bin/java.exe']"
         ) == str(e)
+
+
+def test_scope():
+    env = appose.system()
+    with env.python() as service:
+        task = service.task(sqrt_import, {"age": 100})
+        task.start()
+        task.wait_for()
+        result = round(task.outputs.get("result"))
+        assert result == 10
 
 
 def execute_and_assert(service: Service, script: str):
