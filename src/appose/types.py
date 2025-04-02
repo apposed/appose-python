@@ -28,7 +28,6 @@
 ###
 
 import json
-import platform
 import re
 from math import ceil, prod
 from multiprocessing import resource_tracker, shared_memory
@@ -49,10 +48,10 @@ class SharedMemory(shared_memory.SharedMemory):
     def __init__(self, name: str = None, create: bool = False, size: int = 0):
         super().__init__(name=name, create=create, size=size)
         self._unlink_on_dispose = create
-        if _is_worker and not platform.system().startswith("Windows"):
+        if _is_worker:
             # HACK: Remove this shared memory block from the resource_tracker,
-            # which wants to clean up shared memory blocks after all known
-            # references are done using them.
+            # which would otherwise want to clean up shared memory blocks
+            # after all known references are done using them.
             #
             # There is one resource_tracker per Python process, and they will
             # each try to delete shared memory blocks known to them when they
@@ -61,7 +60,37 @@ class SharedMemory(shared_memory.SharedMemory):
             # As such, the rule Appose follows is: let the service process
             # always handle cleanup of shared memory blocks, regardless of
             # which process initially allocated it.
-            resource_tracker.unregister(self._name, "shared_memory")
+            try:
+                resource_tracker.unregister(self._name, "shared_memory")
+            except ModuleNotFoundError:
+                # Unfortunately, on (some?) Windows systems, we see the error:
+                #
+                # Traceback (most recent call last):
+                #   File "...\site-packages\appose\types.py", line 97, in decode
+                #     return json.loads(the_json, object_hook=_appose_object_hook)
+                #   File "...\lib\json\__init__.py", line 359, in loads
+                #     return cls(**kw).decode(s)
+                #   File "...\lib\json\decoder.py", line 337, in decode
+                #     obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+                #   File "...\lib\json\decoder.py", line 353, in raw_decode
+                #     obj, end = self.scan_once(s, idx)
+                #   File "...\site-packages\appose\types.py", line 177, in _appose_object_hook
+                #     return SharedMemory(name=(obj["name"]), size=(obj["size"]))
+                #   File "...\site-packages\appose\types.py", line 63, in __init__
+                #     resource_tracker.unregister(self._name, "shared_memory")
+                #   File "...\lib\multiprocessing\resource_tracker.py", line 159, in unregister
+                #     self._send('UNREGISTER', name, rtype)
+                #   File "...\lib\multiprocessing\resource_tracker.py", line 162, in _send
+                #     self.ensure_running()
+                #   File "...\lib\multiprocessing\resource_tracker.py", line 129, in ensure_running
+                #     pid = util.spawnv_passfds(exe, args, fds_to_pass)
+                #   File "...\lib\multiprocessing\util.py", line 448, in spawnv_passfds
+                #     import _posixsubprocess
+                # ModuleNotFoundError: No module named '_posixsubprocess'
+                #
+                # A bug in Python? Regardless: we guard against it here.
+                # See also: https://github.com/imglib/imglib2-appose/issues/1
+                pass
 
     def unlink_on_dispose(self, value: bool) -> None:
         """
