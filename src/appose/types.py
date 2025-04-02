@@ -28,6 +28,7 @@
 ###
 
 import json
+import platform
 import re
 from math import ceil, prod
 from multiprocessing import resource_tracker, shared_memory
@@ -48,7 +49,7 @@ class SharedMemory(shared_memory.SharedMemory):
     def __init__(self, name: str = None, create: bool = False, size: int = 0):
         super().__init__(name=name, create=create, size=size)
         self._unlink_on_dispose = create
-        if _is_worker:
+        if _is_worker and not platform.system().startswith("Windows"):
             # HACK: Remove this shared memory block from the resource_tracker,
             # which wants to clean up shared memory blocks after all known
             # references are done using them.
