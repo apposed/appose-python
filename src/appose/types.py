@@ -65,28 +65,28 @@ class SharedMemory(shared_memory.SharedMemory):
             except ModuleNotFoundError:
                 # Unfortunately, on (some?) Windows systems, we see the error:
                 #
-                # Traceback (most recent call last):
-                #   File "...\site-packages\appose\types.py", line 97, in decode
-                #     return json.loads(the_json, object_hook=_appose_object_hook)
-                #   File "...\lib\json\__init__.py", line 359, in loads
-                #     return cls(**kw).decode(s)
-                #   File "...\lib\json\decoder.py", line 337, in decode
-                #     obj, end = self.raw_decode(s, idx=_w(s, 0).end())
-                #   File "...\lib\json\decoder.py", line 353, in raw_decode
-                #     obj, end = self.scan_once(s, idx)
-                #   File "...\site-packages\appose\types.py", line 177, in _appose_object_hook
-                #     return SharedMemory(name=(obj["name"]), size=(obj["size"]))
-                #   File "...\site-packages\appose\types.py", line 63, in __init__
-                #     resource_tracker.unregister(self._name, "shared_memory")
-                #   File "...\lib\multiprocessing\resource_tracker.py", line 159, in unregister
-                #     self._send('UNREGISTER', name, rtype)
-                #   File "...\lib\multiprocessing\resource_tracker.py", line 162, in _send
-                #     self.ensure_running()
-                #   File "...\lib\multiprocessing\resource_tracker.py", line 129, in ensure_running
-                #     pid = util.spawnv_passfds(exe, args, fds_to_pass)
-                #   File "...\lib\multiprocessing\util.py", line 448, in spawnv_passfds
-                #     import _posixsubprocess
-                # ModuleNotFoundError: No module named '_posixsubprocess'
+                # Traceback (most recent call last):                                                # noqa: E501
+                #   File "...\site-packages\appose\types.py", line 97, in decode                    # noqa: E501
+                #     return json.loads(the_json, object_hook=_appose_object_hook)                  # noqa: E501
+                #   File "...\lib\json\__init__.py", line 359, in loads                             # noqa: E501
+                #     return cls(**kw).decode(s)                                                    # noqa: E501
+                #   File "...\lib\json\decoder.py", line 337, in decode                             # noqa: E501
+                #     obj, end = self.raw_decode(s, idx=_w(s, 0).end())                             # noqa: E501
+                #   File "...\lib\json\decoder.py", line 353, in raw_decode                         # noqa: E501
+                #     obj, end = self.scan_once(s, idx)                                             # noqa: E501
+                #   File "...\site-packages\appose\types.py", line 177, in _appose_object_hook      # noqa: E501
+                #     return SharedMemory(name=(obj["name"]), size=(obj["size"]))                   # noqa: E501
+                #   File "...\site-packages\appose\types.py", line 63, in __init__                  # noqa: E501
+                #     resource_tracker.unregister(self._name, "shared_memory")                      # noqa: E501
+                #   File "...\lib\multiprocessing\resource_tracker.py", line 159, in unregister     # noqa: E501
+                #     self._send('UNREGISTER', name, rtype)                                         # noqa: E501
+                #   File "...\lib\multiprocessing\resource_tracker.py", line 162, in _send          # noqa: E501
+                #     self.ensure_running()                                                         # noqa: E501
+                #   File "...\lib\multiprocessing\resource_tracker.py", line 129, in ensure_running # noqa: E501
+                #     pid = util.spawnv_passfds(exe, args, fds_to_pass)                             # noqa: E501
+                #   File "...\lib\multiprocessing\util.py", line 448, in spawnv_passfds             # noqa: E501
+                #     import _posixsubprocess                                                       # noqa: E501
+                # ModuleNotFoundError: No module named '_posixsubprocess'                           # noqa: E501
                 #
                 # A bug in Python? Regardless: we guard against it here.
                 # See also: https://github.com/imglib/imglib2-appose/issues/1
