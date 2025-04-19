@@ -31,6 +31,7 @@
 TODO
 """
 
+import abc
 import os
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -172,12 +173,12 @@ class Environment:
         return Service(self.base, all_args)
 
 
-class BuildHandler(ABC):
-    @abstractmethod
+class BuildHandler(abc.ABC):
+    @abc.abstractmethod
     def include(self, content: str, scheme: Optional[str]) -> bool:
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def channel(self, name: str, location: Optional[str]) -> bool:
         pass
 
