@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "appose"
 version = "0.2.1.dev0"
 description = "Appose: multi-language interprocess cooperation with shared memory."
-license = {text = "Simplified BSD License"}
+license = "BSD-2-Clause"
 authors = [{name = "Appose developers"}]
 readme = "README.md"
 keywords = ["java", "javascript", "python", "cross-language", "interprocess"]
@@ -19,7 +19,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Unix",
     "Operating System :: MacOS",
