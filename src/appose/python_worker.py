@@ -140,6 +140,17 @@ class Task:
 
             self._report_completion()
 
+        # pre-load imports in before starting a new separate Thread.
+        # in windows some imports (e.g. numpy) lead to the script get stuck if loaded in separate thread
+        block = ast.parse(script, mode='exec')
+        import_nodes = [
+            node for node in block.body
+            if isinstance(node, (ast.Import, ast.ImportFrom))
+        ]
+        import_block = ast.Module(body=import_nodes, type_ignores=[])
+        compiled_imports = compile(import_block, filename="<imports>", mode="exec")
+        exec(compiled_imports, globals())
+
         # Create a thread and save a reference to it, in case its script
         # ends up killing the thread. This happens e.g. if it calls sys.exit.
         self.thread = Thread(target=execute_script, name=f"Appose-{self.uuid}")
