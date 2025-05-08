@@ -141,7 +141,8 @@ class Task:
             self._report_completion()
 
         # pre-load imports in before starting a new separate Thread.
-        # in windows some imports (e.g. numpy) lead to the script get stuck if loaded in separate thread
+        # in windows some imports (e.g. numpy) lead to the script 
+        # get stuck if loaded in separate thread
         block = ast.parse(script, mode='exec')
         import_nodes = [
             node for node in block.body
