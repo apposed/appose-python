@@ -141,9 +141,10 @@ class Task:
 
             self._report_completion()
 
-        # pre-load imports in before starting a new separate Thread.
-        # in windows some imports (e.g. numpy) lead to the script 
-        # get stuck if loaded in separate thread
+        # HACK: Pre-load toplevel import statements before running the script
+        # as a whole on its own Thread. Why? Because on Windows, some imports
+        # (e.g. numpy) may lead to hangs if loaded from a separate thread.
+        # See https://github.com/apposed/appose/issues/13.
         block = ast.parse(script, mode='exec')
         import_nodes = [
             node for node in block.body
