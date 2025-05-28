@@ -56,6 +56,7 @@ class Task:
         self.outputs = {}
         self.finished = False
         self.cancel_requested = False
+        self.thread = None  # Initialize thread attribute
 
     def update(
         self,
@@ -190,7 +191,7 @@ def main() -> None:
         while running:
             sleep(0.05)
             dead = {
-                uuid: task for uuid, task in tasks.items() if not task.thread.is_alive()
+                uuid: task for uuid, task in tasks.items() if task.thread is not None and not task.thread.is_alive()
             }
             for uuid, task in dead.items():
                 tasks.pop(uuid)
