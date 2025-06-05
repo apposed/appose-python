@@ -43,7 +43,7 @@ import sys
 import traceback
 from threading import Thread
 from time import sleep
-from typing import Optional
+from typing import Any, Dict, Optional
 
 # NB: Avoid relative imports so that this script can be run standalone.
 from appose.service import RequestType, ResponseType
@@ -63,6 +63,7 @@ class Task:
         message: Optional[str] = None,
         current: Optional[int] = None,
         maximum: Optional[int] = None,
+        info: Optional[Dict[str, Any]] = None,
     ) -> None:
         args = {}
         if message is not None:
@@ -77,6 +78,7 @@ class Task:
                 args["maximum"] = int(maximum)
             except ValueError:
                 pass
+        args["info"] = info
         self._respond(ResponseType.UPDATE, args)
 
     def cancel(self) -> None:
