@@ -176,9 +176,10 @@ class Task:
                 already_terminated = True
             self.finished = True
 
-        response = {"task": self.uuid, "responseType": response_type.value}
+        response = {}
         if args is not None:
             response.update(args)
+        response.update({"task": self.uuid, "responseType": response_type.value})
         # NB: Flush is necessary to ensure service receives the data!
         try:
             print(encode(response), flush=True)
