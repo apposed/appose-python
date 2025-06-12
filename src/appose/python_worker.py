@@ -147,9 +147,10 @@ class Task:
         # as a whole on its own Thread. Why? Because on Windows, some imports
         # (e.g. numpy) may lead to hangs if loaded from a separate thread.
         # See https://github.com/apposed/appose/issues/13.
-        block = ast.parse(script, mode='exec')
+        block = ast.parse(script, mode="exec")
         import_nodes = [
-            node for node in block.body
+            node
+            for node in block.body
             if isinstance(node, (ast.Import, ast.ImportFrom))
         ]
         import_block = ast.Module(body=import_nodes, type_ignores=[])
@@ -207,7 +208,9 @@ def main() -> None:
         while running:
             sleep(0.05)
             dead = {
-                uuid: task for uuid, task in tasks.items() if task.thread is not None and not task.thread.is_alive()
+                uuid: task
+                for uuid, task in tasks.items()
+                if task.thread is not None and not task.thread.is_alive()
             }
             for uuid, task in dead.items():
                 tasks.pop(uuid)

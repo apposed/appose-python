@@ -270,7 +270,9 @@ class ResponseType(Enum):
 
 
 class TaskEvent:
-    def __init__(self, task: "Task", response_type: ResponseType, info: Optional[Dict[str, Any]]) -> None:
+    def __init__(
+        self, task: "Task", response_type: ResponseType, info: Optional[Dict[str, Any]]
+    ) -> None:
         self.task: "Task" = task
         self.response_type: ResponseType = response_type
         self.info: Optional[Dict[str, Any]] = info
