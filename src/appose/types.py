@@ -45,8 +45,24 @@ class SharedMemory(shared_memory.SharedMemory):
     `unlink_on_dispose` flag.
     """
 
-    def __init__(self, name: str = None, create: bool = False, size: int = 0):
-        super().__init__(name=name, create=create, size=size)
+    def __init__(self, name: str = None, create: bool = False, rsize: int = 0):
+        """
+        Create a new shared memory block, or attach to an existing one.
+
+        :param name:
+            The unique name for the requested shared memory, specified as a
+            string. If create is True (i.e. a new shared memory block) and
+            no name is given, a novel name will be generated.
+        :param create:
+            Whether a new shared memory block is created (True)
+            or an existing one is attached to (False).
+        :param rsize:
+            Requested size in bytes. The true allocated size will be at least
+            this much, but may be rounded up to the next block size multiple,
+            depending on the running platform.
+        """
+        super().__init__(name=name, create=create, size=rsize)
+        self.rsize = rsize
         self._unlink_on_dispose = create
         if _is_worker:
             # HACK: Remove this shared memory block from the resource_tracker,
@@ -146,7 +162,7 @@ class NDArray:
         self.shape = shape
         self.shm = (
             SharedMemory(
-                create=True, size=ceil(prod(shape) * _bytes_per_element(dtype))
+                create=True, rsize=ceil(prod(shape) * _bytes_per_element(dtype))
             )
             if shm is None
             else shm
@@ -157,7 +173,7 @@ class NDArray:
             f"NDArray("
             f"dtype='{self.dtype}', "
             f"shape={self.shape}, "
-            f"shm='{self.shm.name}' ({self.shm.size}))"
+            f"shm='{self.shm.name}' ({self.shm.rsize}))"
         )
 
     def ndarray(self):
@@ -188,7 +204,7 @@ class _ApposeJSONEncoder(json.JSONEncoder):
             return {
                 "appose_type": "shm",
                 "name": obj.name,
-                "size": obj.size,
+                "rsize": obj.rsize,
             }
         if isinstance(obj, NDArray):
             return {
@@ -204,7 +220,7 @@ def _appose_object_hook(obj: Dict):
     atype = obj.get("appose_type")
     if atype == "shm":
         # Attach to existing shared memory block.
-        return SharedMemory(name=(obj["name"]), size=(obj["size"]))
+        return SharedMemory(name=(obj["name"]), rsize=(obj["rsize"]))
     elif atype == "ndarray":
         return NDArray(obj["dtype"], obj["shape"], obj["shm"])
     else:

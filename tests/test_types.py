@@ -56,7 +56,7 @@ class TypesTest(unittest.TestCase):
             '"shm":{'                   # noqa: E131
                 '"appose_type":"shm",'  # noqa: E131
                 '"name":"SHM_NAME",'    # noqa: E131
-                '"size":4000'           # noqa: E131
+                '"rsize":4000'          # noqa: E131
             "}"                         # noqa: E131
         "}"
         # fmt: on
@@ -103,7 +103,7 @@ class TypesTest(unittest.TestCase):
             self.assertEqual(expected, json_str)
 
     def test_decode(self):
-        with appose.SharedMemory(create=True, size=4000) as shm:
+        with appose.SharedMemory(create=True, rsize=4000) as shm:
             shm_name = shm.name
             data = appose.types.decode(self.JSON.replace("SHM_NAME", shm_name))
             self.assertIsNotNone(data)
