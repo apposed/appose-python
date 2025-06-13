@@ -82,7 +82,7 @@ And here is an example using a few more of Appose's features:
     def task_listener(event):
         match event.responseType:
             case UPDATE:
-                print(f"Progress {task.current}/{task.maximum}")
+                print(f"Progress {event.current}/{event.maximum}")
             case COMPLETION:
                 numer = task.outputs["numer"]
                 denom = task.outputs["denom"]

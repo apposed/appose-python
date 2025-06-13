@@ -271,10 +271,19 @@ class ResponseType(Enum):
 
 class TaskEvent:
     def __init__(
-        self, task: "Task", response_type: ResponseType, info: Optional[Dict[str, Any]]
+        self,
+        task: "Task",
+        response_type: ResponseType,
+        message: Optional[str] = None,
+        current: Optional[int] = None,
+        maximum: Optional[int] = None,
+        info: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.task: "Task" = task
         self.response_type: ResponseType = response_type
+        self.message: Optional[str] = message
+        self.current: Optional[int] = current
+        self.maximum: Optional[int] = maximum
         self.info: Optional[Dict[str, Any]] = info
 
     def __str__(self):
@@ -369,13 +378,8 @@ class Task:
             case ResponseType.LAUNCH:
                 self.status = TaskStatus.RUNNING
             case ResponseType.UPDATE:
-                self.message = response.get("message")
-                current = response.get("current")
-                maximum = response.get("maximum")
-                if current is not None:
-                    self.current = int(current)
-                if maximum is not None:
-                    self.maximum = int(maximum)
+                # No extra action needed.
+                pass
             case ResponseType.COMPLETION:
                 self.service._tasks.pop(self.uuid, None)
                 self.status = TaskStatus.COMPLETE
@@ -395,8 +399,11 @@ class Task:
                 )
                 return
 
+        message = response.get("message")
+        current = response.get("current")
+        maximum = response.get("maximum")
         info = response.get("info")
-        event = TaskEvent(self, response_type, info)
+        event = TaskEvent(self, response_type, message, current, maximum, info)
         for listener in self.listeners:
             listener(event)
 
@@ -413,7 +420,4 @@ class Task:
             self.cv.notify_all()
 
     def __str__(self):
-        return (
-            f"{self.uuid=}, {self.status=}, {self.message=}, "
-            f"{self.current=}, {self.maximum=}, {self.error=}"
-        )
+        return f"{self.uuid=}, {self.status=}, {self.error=}"

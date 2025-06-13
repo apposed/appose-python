@@ -108,10 +108,10 @@ def execute_and_assert(service: Service, script: str):
     class TaskState:
         def __init__(self, event):
             self.response_type = event.response_type
+            self.message = event.message
+            self.current = event.current
+            self.maximum = event.maximum
             self.status = event.task.status
-            self.message = event.task.message
-            self.current = event.task.current
-            self.maximum = event.task.maximum
             self.error = event.task.error
 
     events = []
@@ -133,8 +133,8 @@ def execute_and_assert(service: Service, script: str):
     assert ResponseType.LAUNCH == launch.response_type
     assert TaskStatus.RUNNING == launch.status
     assert launch.message is None
-    assert 0 == launch.current
-    assert 1 == launch.maximum
+    assert launch.current is None
+    assert launch.maximum is None
     assert launch.error is None
 
     v = 9999
@@ -145,13 +145,13 @@ def execute_and_assert(service: Service, script: str):
         assert TaskStatus.RUNNING == update.status
         assert f"[{i}] -> {v}" == update.message
         assert i == update.current
-        assert 1 == update.maximum
+        assert update.maximum is None
         assert update.error is None
 
     completion = events[92]
     assert ResponseType.COMPLETION == completion.response_type
     assert TaskStatus.COMPLETE == completion.status
-    assert "[90] -> 1" == completion.message
-    assert 90 == completion.current
-    assert 1 == completion.maximum
+    assert completion.message is None  # no message from non-UPDATE response
+    assert completion.current is None  # no current from non-UPDATE response
+    assert completion.maximum is None  # no maximum from non-UPDATE response
     assert completion.error is None
