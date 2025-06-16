@@ -51,12 +51,16 @@ from appose.types import Args, _set_worker, decode, encode
 
 
 class Task:
-    def __init__(self, uuid: str) -> None:
-        self.uuid = uuid
+    def __init__(self, uuid: str, script: str, inputs: Args | None = None) -> None:
+        self._uuid = uuid
+        self._script = script
+        self._inputs = inputs
+        self._finished = False
+        self._thread = None
+
+        # Public-facing fields for use within the task script.
         self.outputs = {}
-        self.finished = False
         self.cancel_requested = False
-        self.thread = None  # Initialize thread attribute
 
     def update(
         self,
@@ -88,78 +92,56 @@ class Task:
         args = None if error is None else {"error": error}
         self._respond(ResponseType.FAILURE, args)
 
-    def _start(self, script: str, inputs: Args | None = None) -> None:
-        def execute_script():
-            try:
-                # Populate script bindings.
-                binding = {"task": self}
-                if inputs is not None:
-                    binding.update(inputs)
+    def _run(self) -> None:
+        try:
+            # Populate script bindings.
+            binding = {"task": self}
+            if self._inputs is not None:
+                binding.update(self._inputs)
 
-                # Inform the calling process that the script is launching.
-                self._report_launch()
+            # Inform the calling process that the script is launching.
+            self._report_launch()
 
-                # Execute the script.
-                # result = exec(script, locals=binding)
-                result = None
+            # Execute the script.
+            # result = exec(script, locals=binding)
+            result = None
 
-                # NB: Execute the block, except for the last statement,
-                # which we evaluate instead to get its return value.
-                # Credit: https://stackoverflow.com/a/39381428/1207769
+            # NB: Execute the block, except for the last statement,
+            # which we evaluate instead to get its return value.
+            # Credit: https://stackoverflow.com/a/39381428/1207769
 
-                block = ast.parse(script, mode="exec")
-                last = None
-                if (
-                    len(block.body) > 0
-                    and hasattr(block.body[-1], "value")
-                    and not isinstance(block.body[-1], ast.Assign)
-                ):
-                    # Last statement of the script looks like an expression. Evaluate!
-                    last = ast.Expression(block.body.pop().value)
+            block = ast.parse(self._script, mode="exec")
+            last = None
+            if (
+                len(block.body) > 0
+                and hasattr(block.body[-1], "value")
+                and not isinstance(block.body[-1], ast.Assign)
+            ):
+                # Last statement of the script looks like an expression. Evaluate!
+                last = ast.Expression(block.body.pop().value)
 
-                # NB: When `exec` gets two separate objects as *globals* and
-                # *locals*, the code will be executed as if it were embedded in
-                # a class definition. This means functions and classes defined
-                # in the executed code will not be able to access variables
-                # assigned at the top level, because the "top level" variables
-                # are treated as class variables in a class definition.
-                # See: https://docs.python.org/3/library/functions.html#exec
-                _globals = binding
-                exec(compile(block, "<string>", mode="exec"), _globals, binding)
-                if last is not None:
-                    result = eval(
-                        compile(last, "<string>", mode="eval"), _globals, binding
-                    )
+            # NB: When `exec` gets two separate objects as *globals* and
+            # *locals*, the code will be executed as if it were embedded in
+            # a class definition. This means functions and classes defined
+            # in the executed code will not be able to access variables
+            # assigned at the top level, because the "top level" variables
+            # are treated as class variables in a class definition.
+            # See: https://docs.python.org/3/library/functions.html#exec
+            _globals = binding
+            exec(compile(block, "<string>", mode="exec"), _globals, binding)
+            if last is not None:
+                result = eval(compile(last, "<string>", mode="eval"), _globals, binding)
 
-                # Report the results to the Appose calling process.
-                if isinstance(result, dict):
-                    # Script produced a dict; add all entries to the outputs.
-                    self.outputs.update(result)
-                elif result is not None:
-                    # Script produced a non-dict; add it alone to the outputs.
-                    self.outputs["result"] = result
-                self._report_completion()
-            except Exception:
-                self.fail(traceback.format_exc())
-
-        # HACK: Pre-load toplevel import statements before running the script
-        # as a whole on its own Thread. Why? Because on Windows, some imports
-        # (e.g. numpy) may lead to hangs if loaded from a separate thread.
-        # See https://github.com/apposed/appose/issues/13.
-        block = ast.parse(script, mode="exec")
-        import_nodes = [
-            node
-            for node in block.body
-            if isinstance(node, (ast.Import, ast.ImportFrom))
-        ]
-        import_block = ast.Module(body=import_nodes, type_ignores=[])
-        compiled_imports = compile(import_block, filename="<imports>", mode="exec")
-        exec(compiled_imports, globals())
-
-        # Create a thread and save a reference to it, in case its script
-        # ends up killing the thread. This happens e.g. if it calls sys.exit.
-        self.thread = Thread(target=execute_script, name=f"Appose-{self.uuid}")
-        self.thread.start()
+            # Report the results to the Appose calling process.
+            if isinstance(result, dict):
+                # Script produced a dict; add all entries to the outputs.
+                self.outputs.update(result)
+            elif result is not None:
+                # Script produced a non-dict; add it alone to the outputs.
+                self.outputs["result"] = result
+            self._report_completion()
+        except Exception:
+            self.fail(traceback.format_exc())
 
     def _report_launch(self) -> None:
         self._respond(ResponseType.LAUNCH, None)
@@ -171,17 +153,17 @@ class Task:
     def _respond(self, response_type: ResponseType, args: Args | None) -> None:
         already_terminated = False
         if response_type.is_terminal():
-            if self.finished:
+            if self._finished:
                 # This is not the first terminal response. Let's
                 # remember, in case an exception is generated below,
                 # so that we can avoid infinite recursion loops.
                 already_terminated = True
-            self.finished = True
+            self._finished = True
 
         response = {}
         if args is not None:
             response.update(args)
-        response.update({"task": self.uuid, "responseType": response_type.value})
+        response.update({"task": self._uuid, "responseType": response_type.value})
         # NB: Flush is necessary to ensure service receives the data!
         try:
             print(encode(response), flush=True)
@@ -197,57 +179,71 @@ class Task:
             self.fail(traceback.format_exc())
 
 
-def main() -> None:
-    _set_worker(True)
+class Worker:
 
-    tasks = {}
-    running = True
+    def __init__(self):
+        self.tasks = {}
+        self.running = True
 
-    def cleanup_threads():
-        while running:
+        # Flag this process as a worker, not a service.
+        _set_worker(True)
+
+        Thread(target=self._process_input, name="Appose-Receiver").start()
+        Thread(target=self._cleanup_threads, name="Appose-Janitor").start()
+
+    def run(self) -> None:
+        # Block until worker stops running.
+        while self.running:
+            sleep(0.05)
+
+    def _process_input(self) -> None:
+        while True:
+            try:
+                line = input().strip()
+            except EOFError:
+                line = None
+            if not line:
+                self.running = False
+                return
+
+            request = decode(line)
+            uuid = request.get("task")
+            request_type = request.get("requestType")
+
+            match RequestType(request_type):
+                case RequestType.EXECUTE:
+                    script = request.get("script")
+                    inputs = request.get("inputs")
+                    task = Task(uuid, script, inputs)
+                    self.tasks[uuid] = task
+                    task._thread = Thread(target=task._run, name=f"Appose-{uuid}")
+                    task._thread.start()
+
+                case RequestType.CANCEL:
+                    task = self.tasks.get(uuid)
+                    if task is None:
+                        print(f"No such task: {uuid}", file=sys.stderr)
+                        continue
+                    task.cancel_requested = True
+
+    def _cleanup_threads(self) -> None:
+        while self.running:
             sleep(0.05)
             dead = {
                 uuid: task
-                for uuid, task in tasks.items()
-                if task.thread is not None and not task.thread.is_alive()
+                for uuid, task in self.tasks.items()
+                if task._thread is not None and not task._thread.is_alive()
             }
             for uuid, task in dead.items():
-                tasks.pop(uuid)
-                if not task.finished:
+                self.tasks.pop(uuid)
+                if not task._finished:
                     # The task died before reporting a terminal status.
                     # We report this situation as failure by thread death.
                     task.fail("thread death")
 
-    Thread(target=cleanup_threads, name="Appose-Janitor").start()
 
-    while True:
-        try:
-            line = input().strip()
-        except EOFError:
-            break
-        if not line:
-            break
-
-        request = decode(line)
-        uuid = request.get("task")
-        request_type = request.get("requestType")
-
-        match RequestType(request_type):
-            case RequestType.EXECUTE:
-                script = request.get("script")
-                inputs = request.get("inputs")
-                task = Task(uuid)
-                tasks[uuid] = task
-                task._start(script, inputs)
-
-            case RequestType.CANCEL:
-                task = tasks.get(uuid)
-                if task is None:
-                    print(f"No such task: {uuid}", file=sys.stderr)
-                    continue
-                task.cancel_requested = True
-
-    running = False
+def main() -> None:
+    Worker().run()
 
 
 if __name__ == "__main__":
