@@ -183,6 +183,7 @@ class Worker:
 
     def __init__(self):
         self.tasks = {}
+        self.queue: list[Task] = []
         self.running = True
 
         # Flag this process as a worker, not a service.
@@ -192,9 +193,16 @@ class Worker:
         Thread(target=self._cleanup_threads, name="Appose-Janitor").start()
 
     def run(self) -> None:
-        # Block until worker stops running.
+        """
+        Processes tasks from the task queue.
+        """
         while self.running:
-            sleep(0.05)
+            if len(self.queue) == 0:
+                # Nothing queued, so wait a bit.
+                sleep(0.05)
+                continue
+            task = self.queue.pop()
+            task._run()
 
     def _process_input(self) -> None:
         while True:
@@ -214,10 +222,17 @@ class Worker:
                 case RequestType.EXECUTE:
                     script = request.get("script")
                     inputs = request.get("inputs")
+                    queue = request.get("queue")
                     task = Task(uuid, script, inputs)
                     self.tasks[uuid] = task
-                    task._thread = Thread(target=task._run, name=f"Appose-{uuid}")
-                    task._thread.start()
+                    if queue == "main":
+                        # Add the task to the main thread queue.
+                        self.queue.append(task)
+                    else:
+                        # Create a thread and save a reference to it, in case its script
+                        # kills the thread. This happens e.g. if it calls sys.exit.
+                        task._thread = Thread(target=task._run, name=f"Appose-{uuid}")
+                        task._thread.start()
 
                 case RequestType.CANCEL:
                     task = self.tasks.get(uuid)
