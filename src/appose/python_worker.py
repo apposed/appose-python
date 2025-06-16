@@ -43,7 +43,7 @@ import sys
 import traceback
 from threading import Thread
 from time import sleep
-from typing import Any, Dict, Optional
+from typing import Any
 
 # NB: Avoid relative imports so that this script can be run standalone.
 from appose.service import RequestType, ResponseType
@@ -60,10 +60,10 @@ class Task:
 
     def update(
         self,
-        message: Optional[str] = None,
-        current: Optional[int] = None,
-        maximum: Optional[int] = None,
-        info: Optional[Dict[str, Any]] = None,
+        message: str | None = None,
+        current: int | None = None,
+        maximum: int | None = None,
+        info: dict[str, Any] | None = None,
     ) -> None:
         args = {}
         if message is not None:
@@ -84,11 +84,11 @@ class Task:
     def cancel(self) -> None:
         self._respond(ResponseType.CANCELATION, None)
 
-    def fail(self, error: Optional[str] = None) -> None:
+    def fail(self, error: str | None = None) -> None:
         args = None if error is None else {"error": error}
         self._respond(ResponseType.FAILURE, args)
 
-    def _start(self, script: str, inputs: Optional[Args]) -> None:
+    def _start(self, script: str, inputs: Args | None = None) -> None:
         def execute_script():
             try:
                 # Populate script bindings.
@@ -168,7 +168,7 @@ class Task:
         args = None if self.outputs is None else {"outputs": self.outputs}
         self._respond(ResponseType.COMPLETION, args)
 
-    def _respond(self, response_type: ResponseType, args: Optional[Args]) -> None:
+    def _respond(self, response_type: ResponseType, args: Args | None) -> None:
         already_terminated = False
         if response_type.is_terminal():
             if self.finished:
