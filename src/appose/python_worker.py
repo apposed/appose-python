@@ -90,18 +90,19 @@ class Task:
 
     def _start(self, script: str, inputs: Optional[Args]) -> None:
         def execute_script():
-            # Populate script bindings.
-            binding = {"task": self}
-            if inputs is not None:
-                binding.update(inputs)
-
-            # Inform the calling process that the script is launching.
-            self._report_launch()
-
-            # Execute the script.
-            # result = exec(script, locals=binding)
-            result = None
             try:
+                # Populate script bindings.
+                binding = {"task": self}
+                if inputs is not None:
+                    binding.update(inputs)
+
+                # Inform the calling process that the script is launching.
+                self._report_launch()
+
+                # Execute the script.
+                # result = exec(script, locals=binding)
+                result = None
+
                 # NB: Execute the block, except for the last statement,
                 # which we evaluate instead to get its return value.
                 # Credit: https://stackoverflow.com/a/39381428/1207769
@@ -129,19 +130,17 @@ class Task:
                     result = eval(
                         compile(last, "<string>", mode="eval"), _globals, binding
                     )
+
+                # Report the results to the Appose calling process.
+                if isinstance(result, dict):
+                    # Script produced a dict; add all entries to the outputs.
+                    self.outputs.update(result)
+                elif result is not None:
+                    # Script produced a non-dict; add it alone to the outputs.
+                    self.outputs["result"] = result
+                self._report_completion()
             except Exception:
                 self.fail(traceback.format_exc())
-                return
-
-            # Report the results to the Appose calling process.
-            if isinstance(result, dict):
-                # Script produced a dict; add all entries to the outputs.
-                self.outputs.update(result)
-            elif result is not None:
-                # Script produced a non-dict; add it alone to the outputs.
-                self.outputs["result"] = result
-
-            self._report_completion()
 
         # HACK: Pre-load toplevel import statements before running the script
         # as a whole on its own Thread. Why? Because on Windows, some imports
