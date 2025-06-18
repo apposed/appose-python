@@ -36,7 +36,7 @@ import threading
 from enum import Enum
 from pathlib import Path
 from traceback import format_exc
-from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable
 from uuid import uuid4
 
 from .types import Args, decode, encode
@@ -52,17 +52,17 @@ class Service:
 
     _service_count = 0
 
-    def __init__(self, cwd: Union[str, Path], args: Sequence[str]) -> None:
+    def __init__(self, cwd: str | Path, args: list[str]) -> None:
         self._cwd = cwd
         self._args = args[:]
-        self._tasks: Dict[str, "Task"] = {}
+        self._tasks: dict[str, "Task"] = {}
         self._service_id = Service._service_count
         Service._service_count += 1
-        self._process: Optional[subprocess.Popen] = None
-        self._stdout_thread: Optional[threading.Thread] = None
-        self._stderr_thread: Optional[threading.Thread] = None
-        self._monitor_thread: Optional[threading.Thread] = None
-        self._debug_callback: Optional[Callable[[Any], Any]] = None
+        self._process: subprocess.Popen | None = None
+        self._stdout_thread: threading.Thread | None = None
+        self._stderr_thread: threading.Thread | None = None
+        self._monitor_thread: threading.Thread | None = None
+        self._debug_callback: Callable[[Any], Any] | None = None
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
         """
@@ -109,7 +109,7 @@ class Service:
         self._stderr_thread.start()
         self._monitor_thread.start()
 
-    def task(self, script: str, inputs: Optional[Args] = None) -> "Task":
+    def task(self, script: str, inputs: Args | None = None) -> "Task":
         """
         Create a new task, passing the given script to the worker for execution.
         :param script:
@@ -274,17 +274,17 @@ class TaskEvent:
         self,
         task: "Task",
         response_type: ResponseType,
-        message: Optional[str] = None,
-        current: Optional[int] = None,
-        maximum: Optional[int] = None,
-        info: Optional[Dict[str, Any]] = None,
+        message: str | None = None,
+        current: int | None = None,
+        maximum: int | None = None,
+        info: dict[str, Any] | None = None,
     ) -> None:
         self.task: "Task" = task
         self.response_type: ResponseType = response_type
-        self.message: Optional[str] = message
-        self.current: Optional[int] = current
-        self.maximum: Optional[int] = maximum
-        self.info: Optional[Dict[str, Any]] = info
+        self.message: str | None = message
+        self.current: int | None = current
+        self.maximum: int | None = maximum
+        self.info: dict[str, Any] | None = info
 
     def __str__(self):
         return f"[{self.response_type}] {self.task}"
@@ -298,7 +298,7 @@ class Task:
     """
 
     def __init__(
-        self, service: Service, script: str, inputs: Optional[Args] = None
+        self, service: Service, script: str, inputs: Args | None = None
     ) -> None:
         self.uuid = uuid4().hex
         self.service = service
@@ -308,11 +308,11 @@ class Task:
             self.inputs.update(inputs)
         self.outputs: Args = {}
         self.status: TaskStatus = TaskStatus.INITIAL
-        self.message: Optional[str] = None
+        self.message: str | None = None
         self.current: int = 0
         self.maximum: int = 1
-        self.error: Optional[str] = None
-        self.listeners: List[Callable[["TaskEvent"], None]] = []
+        self.error: str | None = None
+        self.listeners: list[Callable[["TaskEvent"], None]] = []
         self.cv = threading.Condition()
         self.service._tasks[self.uuid] = self
 
