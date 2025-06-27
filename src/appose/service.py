@@ -109,16 +109,20 @@ class Service:
         self._stderr_thread.start()
         self._monitor_thread.start()
 
-    def task(self, script: str, inputs: Args | None = None) -> "Task":
+    def task(
+        self, script: str, inputs: Args | None = None, queue: str | None = None
+    ) -> "Task":
         """
         Create a new task, passing the given script to the worker for execution.
         :param script:
             The script for the worker to execute in its environment.
         :param inputs:
             Optional list of key/value pairs to feed into the script as inputs.
+        :param queue:
+            Optional queue target. Pass "main" to queue to worker's main thread.
         """
         self.start()
-        return Task(self, script, inputs)
+        return Task(self, script, inputs, queue)
 
     def close(self) -> None:
         """
@@ -298,12 +302,17 @@ class Task:
     """
 
     def __init__(
-        self, service: Service, script: str, inputs: Args | None = None
+        self,
+        service: Service,
+        script: str,
+        inputs: Args | None = None,
+        queue: str | None = None,
     ) -> None:
         self.uuid = uuid4().hex
         self.service = service
         self.script = script
         self.inputs: Args = {}
+        self.queue: str | None = queue
         if inputs is not None:
             self.inputs.update(inputs)
         self.outputs: Args = {}
@@ -323,7 +332,7 @@ class Task:
 
             self.status = TaskStatus.QUEUED
 
-        args = {"script": self.script, "inputs": self.inputs}
+        args = {"script": self.script, "inputs": self.inputs, "queue": self.queue}
         self._request(RequestType.EXECUTE, args)
 
         return self
