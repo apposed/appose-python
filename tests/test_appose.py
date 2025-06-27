@@ -62,6 +62,11 @@ def sqrt_age(age):
 task.outputs["result"] = sqrt_age(age)
 """
 
+main_thread_check = """
+import threading
+task.outputs["thread"] = threading.current_thread().name
+"""
+
 
 def test_groovy():
     env = appose.system()
@@ -99,6 +104,21 @@ def test_scope():
         result = round(task.outputs.get("result"))
         assert result == 10
 
+
+def test_main_thread_queue():
+    env = appose.system()
+    with env.python() as service:
+        task = service.task(main_thread_check, queue="main")
+        task.start()
+        task.wait_for()
+        thread = task.outputs.get("thread")
+        assert thread == "MainThread"
+
+        task = service.task(main_thread_check)
+        task.start()
+        task.wait_for()
+        thread = task.outputs.get("thread")
+        assert thread != "MainThread"
 
 def execute_and_assert(service: Service, script: str):
     task = service.task(script)
