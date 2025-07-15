@@ -34,7 +34,7 @@ fi
 
 if [ $# -gt 0 ]
 then
-  python -m pytest -p no:faulthandler $@
+  python -m pytest -v -p no:faulthandler $@
 else
-  python -m pytest -p no:faulthandler tests
+  python -m pytest -v -p no:faulthandler tests
 fi
