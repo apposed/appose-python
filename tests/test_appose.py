@@ -27,6 +27,8 @@
 # #L%
 ###
 
+import os
+
 import appose
 from appose.service import ResponseType, Service, TaskStatus
 
@@ -68,12 +70,14 @@ def test_groovy():
     # NB: For now, use bin/test.sh to copy the needed JARs.
     class_path = ["target/dependency/*"]
     with env.groovy(class_path=class_path) as service:
+        maybe_debug(service)
         execute_and_assert(service, collatz_groovy)
 
 
 def test_python():
     env = appose.system()
     with env.python() as service:
+        maybe_debug(service)
         execute_and_assert(service, collatz_python)
 
 
@@ -93,6 +97,7 @@ def test_service_startup_failure():
 def test_scope():
     env = appose.system()
     with env.python() as service:
+        maybe_debug(service)
         task = service.task(sqrt_import, {"age": 100})
         task.start()
         task.wait_for()
@@ -155,3 +160,9 @@ def execute_and_assert(service: Service, script: str):
     assert completion.current is None  # no current from non-UPDATE response
     assert completion.maximum is None  # no maximum from non-UPDATE response
     assert completion.error is None
+
+
+def maybe_debug(service):
+    debug = os.getenv("DEBUG")
+    if debug:
+        service.debug(print)
