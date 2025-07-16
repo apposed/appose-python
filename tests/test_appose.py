@@ -64,7 +64,11 @@ def sqrt_age(age):
 task.outputs["result"] = sqrt_age(age)
 """
 
-main_thread_check = """
+main_thread_check_groovy = """
+task.outputs["thread"] = Thread.currentThread().getName()
+"""
+
+main_thread_check_python = """
 import threading
 task.outputs["thread"] = threading.current_thread().name
 """
@@ -110,17 +114,33 @@ def test_scope():
         assert result == 10
 
 
-def test_main_thread_queue():
+def test_main_thread_queue_groovy():
+    env = appose.system()
+    # NB: For now, use bin/test.sh to copy the needed JARs.
+    class_path = ["target/dependency/*"]
+    with env.groovy(class_path=class_path) as service:
+        maybe_debug(service)
+
+        task = service.task(main_thread_check_groovy, queue="main")
+        task.wait_for()
+        thread = task.outputs.get("thread")
+        assert thread == "main"
+
+        task = service.task(main_thread_check_groovy)
+        task.wait_for()
+        thread = task.outputs.get("thread")
+        assert thread != "main"
+
+
+def test_main_thread_queue_python():
     env = appose.system()
     with env.python() as service:
-        task = service.task(main_thread_check, queue="main")
-        task.start()
+        task = service.task(main_thread_check_python, queue="main")
         task.wait_for()
         thread = task.outputs.get("thread")
         assert thread == "MainThread"
 
-        task = service.task(main_thread_check)
-        task.start()
+        task = service.task(main_thread_check_python)
         task.wait_for()
         thread = task.outputs.get("thread")
         assert thread != "MainThread"
