@@ -108,7 +108,6 @@ def test_scope():
     with env.python() as service:
         maybe_debug(service)
         task = service.task(sqrt_import, {"age": 100})
-        task.start()
         task.wait_for()
         result = round(task.outputs.get("result"))
         assert result == 10
