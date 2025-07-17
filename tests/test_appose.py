@@ -57,10 +57,11 @@ while v != 1:
 task.outputs["result"] = time
 """
 
-sqrt_import = """
+calc_sqrt_python = """
 from math import sqrt
 def sqrt_age(age):
     return sqrt(age)
+task.export(sqrt_age=sqrt_age)
 task.outputs["result"] = sqrt_age(age)
 """
 
@@ -103,15 +104,21 @@ def test_service_startup_failure():
         ) == str(e)
 
 
-def test_scope():
+def test_scope_python():
     env = appose.system()
     with env.python() as service:
         maybe_debug(service)
-        task = service.task(sqrt_import, {"age": 100})
+        task = service.task(calc_sqrt_python, {"age": 100})
         task.wait_for()
         assert TaskStatus.COMPLETE == task.status
         result = round(task.outputs.get("result"))
         assert result == 10
+
+        task = service.task("task.outputs['result'] = sqrt_age(age)", {"age": 81})
+        task.wait_for()
+        assert TaskStatus.COMPLETE == task.status
+        result = round(task.outputs.get("result"))
+        assert result == 9
 
 
 def test_main_thread_queue_groovy():

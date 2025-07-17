@@ -51,7 +51,10 @@ from appose.types import Args, _set_worker, decode, encode
 
 
 class Task:
-    def __init__(self, uuid: str, script: str, inputs: Args | None = None) -> None:
+    def __init__(
+        self, worker: "Worker", uuid: str, script: str, inputs: Args | None = None
+    ) -> None:
+        self._worker = worker
         self._uuid = uuid
         self._script = script
         self._inputs = inputs
@@ -61,6 +64,9 @@ class Task:
         # Public-facing fields for use within the task script.
         self.outputs = {}
         self.cancel_requested = False
+
+    def export(self, **kwargs):
+        self._worker.exports.update(kwargs)
 
     def update(
         self,
@@ -96,6 +102,7 @@ class Task:
         try:
             # Populate script bindings.
             binding = {"task": self}
+            binding.update(self._worker.exports)
             if self._inputs is not None:
                 binding.update(self._inputs)
 
@@ -184,6 +191,7 @@ class Worker:
     def __init__(self):
         self.tasks = {}
         self.queue: list[Task] = []
+        self.exports = {}
         self.running = True
 
         # Flag this process as a worker, not a service.
@@ -223,7 +231,7 @@ class Worker:
                     script = request.get("script")
                     inputs = request.get("inputs")
                     queue = request.get("queue")
-                    task = Task(uuid, script, inputs)
+                    task = Task(self, uuid, script, inputs)
                     self.tasks[uuid] = task
                     if queue == "main":
                         # Add the task to the main thread queue.
