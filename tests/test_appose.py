@@ -109,6 +109,7 @@ def test_scope():
         maybe_debug(service)
         task = service.task(sqrt_import, {"age": 100})
         task.wait_for()
+        assert TaskStatus.COMPLETE == task.status
         result = round(task.outputs.get("result"))
         assert result == 10
 
@@ -122,11 +123,13 @@ def test_main_thread_queue_groovy():
 
         task = service.task(main_thread_check_groovy, queue="main")
         task.wait_for()
+        assert TaskStatus.COMPLETE == task.status
         thread = task.outputs.get("thread")
         assert thread == "main"
 
         task = service.task(main_thread_check_groovy)
         task.wait_for()
+        assert TaskStatus.COMPLETE == task.status
         thread = task.outputs.get("thread")
         assert thread != "main"
 
@@ -136,11 +139,13 @@ def test_main_thread_queue_python():
     with env.python() as service:
         task = service.task(main_thread_check_python, queue="main")
         task.wait_for()
+        assert TaskStatus.COMPLETE == task.status
         thread = task.outputs.get("thread")
         assert thread == "MainThread"
 
         task = service.task(main_thread_check_python)
         task.wait_for()
+        assert TaskStatus.COMPLETE == task.status
         thread = task.outputs.get("thread")
         assert thread != "MainThread"
 
