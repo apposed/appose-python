@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "appose"
-version = "0.7.0.dev0"
+version = "0.7.0"
 description = "Appose: multi-language interprocess cooperation with shared memory."
 license = "BSD-2-Clause"
 authors = [{name = "Appose developers"}]
