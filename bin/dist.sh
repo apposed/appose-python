@@ -3,4 +3,4 @@
 dir=$(dirname "$0")
 cd "$dir/.."
 
-python -m build
+uv run python -m build

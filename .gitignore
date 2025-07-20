@@ -3,8 +3,11 @@
 *egg-info/
 /.eggs/
 /.idea/
+/.pytest_cache/
+/.venv/
 /.vscode/
 /build/
 /dist/
 /eggs/
 /target/
+/uv.lock
