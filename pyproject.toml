@@ -28,7 +28,6 @@ classifiers = [
     "Topic :: Utilities",
 ]
 
-# NB: Keep this in sync with environment.yml AND dev-environment.yml!
 requires-python = ">=3.10"
 dependencies = [
 ]
