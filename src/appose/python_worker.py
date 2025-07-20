@@ -187,7 +187,6 @@ class Task:
 
 
 class Worker:
-
     def __init__(self):
         self.tasks = {}
         self.queue: list[Task] = []

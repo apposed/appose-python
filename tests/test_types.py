@@ -33,35 +33,35 @@ import appose
 
 
 class TypesTest(unittest.TestCase):
+    # fmt: off
     JSON = (
         "{"
-        '"posByte":123,"negByte":-98,'
-        '"posDouble":9.876543210123456,"negDouble":-1.234567890987654e+302,'
-        '"posFloat":9.876543,"negFloat":-1.2345678,'
-        '"posInt":1234567890,"negInt":-987654321,'
-        '"posLong":12345678987654321,"negLong":-98765432123456789,'
-        '"posShort":32109,"negShort":-23456,'
-        '"trueBoolean":true,"falseBoolean":false,'
-        '"nullChar":"\\u0000",'
-        '"aString":"-=[]\\\\;\',./_+{}|:\\"<>?'
-        "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz"
-        '~!@#$%^&*()",'
-        '"numbers":[1,1,2,3,5,8],'
-        '"words":["quick","brown","fox"],'
-        # fmt: off
-        '"ndArray":{'
-            '"appose_type":"ndarray",'  # noqa: E131
-            '"dtype":"float32",'        # noqa: E131
-            '"shape":[2,20,25],'        # noqa: E131
-            '"shm":{'                   # noqa: E131
-                '"appose_type":"shm",'  # noqa: E131
-                '"name":"SHM_NAME",'    # noqa: E131
-                '"rsize":4000'          # noqa: E131
-            "}"                         # noqa: E131
-        "}"
-        # fmt: on
+            '"posByte":123,"negByte":-98,'
+            '"posDouble":9.876543210123456,"negDouble":-1.234567890987654e+302,'
+            '"posFloat":9.876543,"negFloat":-1.2345678,'
+            '"posInt":1234567890,"negInt":-987654321,'
+            '"posLong":12345678987654321,"negLong":-98765432123456789,'
+            '"posShort":32109,"negShort":-23456,'
+            '"trueBoolean":true,"falseBoolean":false,'
+            '"nullChar":"\\u0000",'
+            '"aString":"-=[]\\\\;\',./_+{}|:\\"<>?'
+            "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz"
+            '~!@#$%^&*()",'
+            '"numbers":[1,1,2,3,5,8],'
+            '"words":["quick","brown","fox"],'
+            '"ndArray":{'
+                '"appose_type":"ndarray",'
+                '"dtype":"float32",'
+                '"shape":[2,20,25],'
+                '"shm":{'
+                    '"appose_type":"shm",'
+                    '"name":"SHM_NAME",'
+                    '"rsize":4000'
+                "}"
+            "}"
         "}"
     )
+    # fmt: on
 
     STRING = (
         "-=[]\\;',./_+{}|:\"<>?"
