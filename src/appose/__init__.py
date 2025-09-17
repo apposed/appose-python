@@ -80,18 +80,17 @@ And here is an example using a few more of Appose's features:
     """)
 
     def task_listener(event):
-        match event.responseType:
-            case UPDATE:
-                print(f"Progress {event.current}/{event.maximum}")
-            case COMPLETION:
-                numer = task.outputs["numer"]
-                denom = task.outputs["denom"]
-                ratio = numer / denom
-                print(f"Task complete. Result: {numer}/{denom} =~ {ratio}");
-            case CANCELATION:
-                print("Task canceled")
-            case FAILURE:
-                print(f"Task failed: {task.error}")
+        if event.responseType == UPDATE:
+            print(f"Progress {event.current}/{event.maximum}")
+        elif event.responseType == COMPLETION:
+            numer = task.outputs["numer"]
+            denom = task.outputs["denom"]
+            ratio = numer / denom
+            print(f"Task complete. Result: {numer}/{denom} =~ {ratio}");
+        elif event.responseType == CANCELATION:
+            print("Task canceled")
+        elif event.responseType == FAILURE:
+            print(f"Task failed: {task.error}")
 
     task.listen(task_listener)
 

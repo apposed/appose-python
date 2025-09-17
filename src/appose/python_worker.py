@@ -38,6 +38,8 @@ For details, see the Appose README:
 https://github.com/apposed/appose/blob/-/README.md#workers
 """
 
+from __future__ import annotations
+
 import ast
 import sys
 import traceback
@@ -223,30 +225,29 @@ class Worker:
 
             request = decode(line)
             uuid = request.get("task")
-            request_type = request.get("requestType")
+            request_type = RequestType(request.get("requestType"))
 
-            match RequestType(request_type):
-                case RequestType.EXECUTE:
-                    script = request.get("script")
-                    inputs = request.get("inputs")
-                    queue = request.get("queue")
-                    task = Task(self, uuid, script, inputs)
-                    self.tasks[uuid] = task
-                    if queue == "main":
-                        # Add the task to the main thread queue.
-                        self.queue.append(task)
-                    else:
-                        # Create a thread and save a reference to it, in case its script
-                        # kills the thread. This happens e.g. if it calls sys.exit.
-                        task._thread = Thread(target=task._run, name=f"Appose-{uuid}")
-                        task._thread.start()
+            if request_type == RequestType.EXECUTE:
+                script = request.get("script")
+                inputs = request.get("inputs")
+                queue = request.get("queue")
+                task = Task(self, uuid, script, inputs)
+                self.tasks[uuid] = task
+                if queue == "main":
+                    # Add the task to the main thread queue.
+                    self.queue.append(task)
+                else:
+                    # Create a thread and save a reference to it, in case its script
+                    # kills the thread. This happens e.g. if it calls sys.exit.
+                    task._thread = Thread(target=task._run, name=f"Appose-{uuid}")
+                    task._thread.start()
 
-                case RequestType.CANCEL:
-                    task = self.tasks.get(uuid)
-                    if task is None:
-                        print(f"No such task: {uuid}", file=sys.stderr)
-                        continue
-                    task.cancel_requested = True
+            elif request_type == RequestType.CANCEL:
+                task = self.tasks.get(uuid)
+                if task is None:
+                    print(f"No such task: {uuid}", file=sys.stderr)
+                    continue
+                task.cancel_requested = True
 
     def _cleanup_threads(self) -> None:
         while self.running:

@@ -31,6 +31,8 @@
 The appose.service package contains classes for services and tasks.
 """
 
+from __future__ import annotations
+
 import subprocess
 import threading
 from enum import Enum
@@ -383,30 +385,29 @@ class Task:
             return
         response_type = ResponseType(maybe_response_type)
 
-        match response_type:
-            case ResponseType.LAUNCH:
-                self.status = TaskStatus.RUNNING
-            case ResponseType.UPDATE:
-                # No extra action needed.
-                pass
-            case ResponseType.COMPLETION:
-                self.service._tasks.pop(self.uuid, None)
-                self.status = TaskStatus.COMPLETE
-                outputs = response.get("outputs")
-                if outputs is not None:
-                    self.outputs.update(outputs)
-            case ResponseType.CANCELATION:
-                self.service._tasks.pop(self.uuid, None)
-                self.status = TaskStatus.CANCELED
-            case ResponseType.FAILURE:
-                self.service._tasks.pop(self.uuid, None)
-                self.status = TaskStatus.FAILED
-                self.error = response.get("error")
-            case _:
-                self.service._debug_service(
-                    f"Invalid service message type: {response_type}"
-                )
-                return
+        if response_type == ResponseType.LAUNCH:
+            self.status = TaskStatus.RUNNING
+        elif response_type == ResponseType.UPDATE:
+            # No extra action needed.
+            pass
+        elif response_type == ResponseType.COMPLETION:
+            self.service._tasks.pop(self.uuid, None)
+            self.status = TaskStatus.COMPLETE
+            outputs = response.get("outputs")
+            if outputs is not None:
+                self.outputs.update(outputs)
+        elif response_type == ResponseType.CANCELATION:
+            self.service._tasks.pop(self.uuid, None)
+            self.status = TaskStatus.CANCELED
+        elif response_type == ResponseType.FAILURE:
+            self.service._tasks.pop(self.uuid, None)
+            self.status = TaskStatus.FAILED
+            self.error = response.get("error")
+        else:
+            self.service._debug_service(
+                f"Invalid service message type: {response_type}"
+            )
+            return
 
         message = response.get("message")
         current = response.get("current")
