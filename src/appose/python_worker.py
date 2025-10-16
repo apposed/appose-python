@@ -231,6 +231,18 @@ class Worker:
                 script = request.get("script")
                 inputs = request.get("inputs")
                 queue = request.get("queue")
+
+                # pre-load imports before starting a new separate Thread.
+                # in windows some imports (e.g. numpy) lead to the script get stuck if loaded in separate thread
+                block = ast.parse(script, mode='exec')
+                import_nodes = [
+                    node for node in block.body
+                    if isinstance(node, (ast.Import, ast.ImportFrom))
+                ]
+                import_block = ast.Module(body=import_nodes, type_ignores=[])
+                compiled_imports = compile(import_block, filename="<imports>", mode="exec")
+                exec(compiled_imports, globals())
+                
                 task = Task(self, uuid, script, inputs)
                 self.tasks[uuid] = task
                 if queue == "main":
