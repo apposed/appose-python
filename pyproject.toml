@@ -35,6 +35,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "build",
+    "mypy",
     "pytest",
     "ruff",
     "toml",
