@@ -310,7 +310,7 @@ class Task:
         inputs: Args | None = None,
         queue: str | None = None,
     ) -> None:
-        self.uuid = uuid4().hex
+        self.uuid: str = uuid4().hex
         self.service = service
         self.script = script
         self.inputs: Args = {}

@@ -6,6 +6,7 @@
 /.pytest_cache/
 /.venv/
 /.vscode/
+/api/
 /build/
 /dist/
 /eggs/
