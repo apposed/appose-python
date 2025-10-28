@@ -150,7 +150,7 @@ class Task:
                 # Script produced a non-dict; add it alone to the outputs.
                 self.outputs["result"] = result
             self._report_completion()
-        except Exception:
+        except BaseException:
             self.fail(traceback.format_exc())
 
     def _report_launch(self) -> None:
@@ -177,7 +177,7 @@ class Task:
         # NB: Flush is necessary to ensure service receives the data!
         try:
             print(encode(response), flush=True)
-        except Exception:
+        except BaseException:
             if already_terminated:
                 # An exception triggered a failure response which
                 # then triggered another exception. Let's stop here
@@ -278,7 +278,7 @@ def main() -> None:
             exec(init_code, globals())
             # Clean up the temp file
             os.remove(init_script_path)
-        except Exception as e:
+        except BaseException as e:
             print(f"[WARNING] Init script failed: {e}", file=sys.stderr)
 
     Worker().run()
