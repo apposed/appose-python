@@ -283,7 +283,7 @@ def main() -> None:
 
             # Export all public (non-underscore) attributes to worker.
             for key, value in init_namespace.items():
-                if not key.startswith('_'):
+                if not key.startswith("_"):
                     worker.exports[key] = value
 
             # Clean up the temp file.
