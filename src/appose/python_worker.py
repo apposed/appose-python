@@ -194,18 +194,18 @@ class Worker:
         self.tasks = {}
         self.queue: list[Task] = []
         self.exports = {}
-        self.running = True
 
         # Flag this process as a worker, not a service.
         _set_worker(True)
-
-        Thread(target=self._process_input, name="Appose-Receiver").start()
-        Thread(target=self._cleanup_threads, name="Appose-Janitor").start()
 
     def run(self) -> None:
         """
         Processes tasks from the task queue.
         """
+        self.running = True
+        Thread(target=self._process_input, name="Appose-Receiver").start()
+        Thread(target=self._cleanup_threads, name="Appose-Janitor").start()
+
         while self.running:
             if len(self.queue) == 0:
                 # Nothing queued, so wait a bit.
