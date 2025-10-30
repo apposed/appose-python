@@ -267,21 +267,31 @@ class Worker:
 
 
 def main() -> None:
+    worker = Worker()
+
     # Execute init script if provided via environment variable.
     # This happens before the worker's I/O loop starts, which is useful
     # for imports that may interfere with stdin/stdout operations.
     init_script_path = os.environ.get("APPOSE_INIT_SCRIPT")
     if init_script_path and os.path.exists(init_script_path):
         try:
+            # Execute init script in its own namespace.
+            init_namespace = {}
             with open(init_script_path, "r", encoding="utf-8") as f:
                 init_code = f.read()
-            exec(init_code, globals())
-            # Clean up the temp file
+            exec(init_code, init_namespace)
+
+            # Export all public (non-underscore) attributes to worker.
+            for key, value in init_namespace.items():
+                if not key.startswith('_'):
+                    worker.exports[key] = value
+
+            # Clean up the temp file.
             os.remove(init_script_path)
         except BaseException as e:
             print(f"[WARNING] Init script failed: {e}", file=sys.stderr)
 
-    Worker().run()
+    worker.run()
 
 
 if __name__ == "__main__":
