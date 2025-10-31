@@ -55,9 +55,13 @@ from appose.types import Args, _set_worker, decode, encode
 
 class Task:
     def __init__(
-        self, worker: "Worker", uuid: str, script: str, inputs: Args | None = None
+        self,
+        worker: "Worker" | None = None,
+        uuid: str | None = None,
+        script: str | None = None,
+        inputs: Args | None = None,
     ) -> None:
-        self._worker = worker
+        self._worker: Worker = worker or Worker()
         self._uuid = uuid
         self._script = script
         self._inputs = inputs
