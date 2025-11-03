@@ -7,5 +7,5 @@ uv run stubgen --include-private -o api tests/*.py
 find api -name '*.pyi' | while read pyi
 do
   mv "$pyi" "$pyi.original"
-  sed '/^\(from\|import\) /d' "$pyi.original" > "$pyi"
+  sed -e '/^from /d' -e '/^import /d' "$pyi.original" > "$pyi"
 done
