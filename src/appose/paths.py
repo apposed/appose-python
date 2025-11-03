@@ -31,16 +31,17 @@
 Utility functions for working with file paths.
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Optional, Sequence
 
 
 def can_execute(exe: Path) -> bool:
     return os.access(exe, os.X_OK)
 
 
-def find_exe(dirs: Sequence[str], exes: Sequence[str]) -> Optional[Path]:
+def find_exe(dirs: list[str], exes: list[str]) -> Path | None:
     for exe in exes:
         exe_file = Path(exe)
         if exe_file.is_absolute():

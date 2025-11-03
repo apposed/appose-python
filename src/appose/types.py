@@ -27,13 +27,19 @@
 # #L%
 ###
 
+"""
+TODO
+"""
+
+from __future__ import annotations
+
 import json
 import re
 from math import ceil, prod
 from multiprocessing import resource_tracker, shared_memory
-from typing import Any, Dict, Sequence, Union
+from typing import Any
 
-Args = Dict[str, Any]
+Args = dict[str, Any]
 
 
 class SharedMemory(shared_memory.SharedMemory):
@@ -150,7 +156,7 @@ class NDArray:
     a particular shape, and flattened into SharedMemory.
     """
 
-    def __init__(self, dtype: str, shape: Sequence[int], shm: SharedMemory = None):
+    def __init__(self, dtype: str, shape: list[int], shm: SharedMemory = None):
         """
         Create an NDArray.
         :param dtype: The type of the data elements; e.g. int8, uint8, float32, float64.
@@ -216,7 +222,7 @@ class _ApposeJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def _appose_object_hook(obj: Dict):
+def _appose_object_hook(obj: dict):
     atype = obj.get("appose_type")
     if atype == "shm":
         # Attach to existing shared memory block.
@@ -227,7 +233,7 @@ def _appose_object_hook(obj: Dict):
         return obj
 
 
-def _bytes_per_element(dtype: str) -> Union[int, float]:
+def _bytes_per_element(dtype: str) -> int | float:
     try:
         bits = int(re.sub("[^0-9]", "", dtype))
     except ValueError:

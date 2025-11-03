@@ -31,16 +31,17 @@
 TODO
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Union
 
 from .paths import find_exe
 from .service import Service
 
 
 class Environment:
-    def __init__(self, base: Union[Path, str], use_system_path: bool = False):
+    def __init__(self, base: Path | str, use_system_path: bool = False):
         self.base = Path(base).absolute()
         self.use_system_path = use_system_path
 
@@ -71,8 +72,8 @@ class Environment:
 
     def groovy(
         self,
-        class_path: Optional[Sequence[str]] = None,
-        jvm_args: Optional[Sequence[str]] = None,
+        class_path: list[str] | None = None,
+        jvm_args: list[str] | None = None,
     ) -> Service:
         """
         Create a Groovy script service. Groovy (https://groovy-lang.org/)
@@ -101,11 +102,11 @@ class Environment:
     def java(
         self,
         main_class: str,
-        class_path: Optional[Sequence[str]] = None,
-        jvm_args: Optional[Sequence[str]] = None,
+        class_path: list[str] | None = None,
+        jvm_args: list[str] | None = None,
     ) -> Service:
         # Collect classpath elements into a set, to avoid duplicate entries.
-        cp: Dict[str] = {}  # NB: Use dict instead of set to maintain insertion order.
+        cp: dict[str] = {}  # NB: Use dict instead of set to maintain insertion order.
 
         # TODO: Ensure that the classpath includes Appose and its dependencies.
 
@@ -134,7 +135,7 @@ class Environment:
         ]
         return self.service(java_exes, *args)
 
-    def service(self, exes: Sequence[str], *args) -> Service:
+    def service(self, exes: list[str], *args) -> Service:
         """
         Create a service with the given command line arguments.
 
@@ -156,7 +157,7 @@ class Environment:
         if not exes:
             raise ValueError("No executable given")
 
-        dirs: List[str] = (
+        dirs: list[str] = (
             os.environ["PATH"].split(os.pathsep)
             if self.use_system_path
             else [self.base]
@@ -166,6 +167,6 @@ class Environment:
         if exe_file is None:
             raise ValueError(f"No executables found amongst candidates: {exes}")
 
-        all_args: List[str] = [str(exe_file)]
+        all_args: list[str] = [str(exe_file)]
         all_args.extend(args)
         return Service(self.base, all_args)

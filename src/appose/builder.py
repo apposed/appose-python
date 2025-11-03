@@ -31,21 +31,24 @@
 TODO
 """
 
-import os
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Union
 
 from .environment import Environment
-from .paths import find_exe
-from .service import Service
+
 
 class Builder:
+    """
+    TODO
+    """
+
     def __init__(self):
-        self.base_dir: Optional[Path] = None
+        self.base_dir: Path | None = None
         self.system_path: bool = False
-        self.conda_environment_yaml: Optional[Path] = None
-        self.java_vendor: Optional[str] = None
-        self.java_version: Optional[str] = None
+        self.conda_environment_yaml: Path | None = None
+        self.java_vendor: str | None = None
+        self.java_version: str | None = None
 
     def build(self):
         # TODO: Build the thing!
