@@ -68,8 +68,8 @@ class SharedMemory(shared_memory.SharedMemory):
             depending on the running platform.
         """
         super().__init__(name=name, create=create, size=rsize)
-        self.rsize = rsize
-        self._unlink_on_dispose = create
+        self.rsize: int = rsize
+        self._unlink_on_dispose: bool = create
         if _is_worker:
             # HACK: Remove this shared memory block from the resource_tracker,
             # which would otherwise want to clean up shared memory blocks
@@ -164,9 +164,9 @@ class NDArray:
                       with resolution 512x512 would have shape [7, 512, 512].
         :param shm: The SharedMemory containing the array data, or None to create it.
         """
-        self.dtype = dtype
-        self.shape = shape
-        self.shm = (
+        self.dtype: str = dtype
+        self.shape: list[int] = shape
+        self.shm: SharedMemory = (
             SharedMemory(
                 create=True, rsize=ceil(prod(shape) * _bytes_per_element(dtype))
             )

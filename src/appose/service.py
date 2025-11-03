@@ -52,13 +52,13 @@ class Service:
     service of updates via communication over pipes (stdin and stdout).
     """
 
-    _service_count = 0
+    _service_count: int = 0
 
     def __init__(self, cwd: str | Path, args: list[str]) -> None:
-        self._cwd = cwd
-        self._args = args[:]
+        self._cwd: str | Path = cwd
+        self._args: list[str] = args[:]
         self._tasks: dict[str, "Task"] = {}
-        self._service_id = Service._service_count
+        self._service_id: int = Service._service_count
         Service._service_count += 1
         self._process: subprocess.Popen | None = None
         self._stdout_thread: threading.Thread | None = None
@@ -283,14 +283,14 @@ class TaskEvent:
         message: str | None = None,
         current: int | None = None,
         maximum: int | None = None,
-        info: dict[str, Any] | None = None,
+        info: Args | None = None,
     ) -> None:
         self.task: "Task" = task
         self.response_type: ResponseType = response_type
         self.message: str | None = message
         self.current: int | None = current
         self.maximum: int | None = maximum
-        self.info: dict[str, Any] | None = info
+        self.info: Args | None = info
 
     def __str__(self):
         return f"[{self.response_type}] {self.task}"
@@ -311,8 +311,8 @@ class Task:
         queue: str | None = None,
     ) -> None:
         self.uuid: str = uuid4().hex
-        self.service = service
-        self.script = script
+        self.service: Service = service
+        self.script: str = script
         self.inputs: Args = {}
         self.queue: str | None = queue
         if inputs is not None:
@@ -324,7 +324,7 @@ class Task:
         self.maximum: int = 1
         self.error: str | None = None
         self.listeners: list[Callable[["TaskEvent"], None]] = []
-        self.cv = threading.Condition()
+        self.cv: threading.Condition = threading.Condition()
         self.service._tasks[self.uuid] = self
 
     def start(self) -> "Task":

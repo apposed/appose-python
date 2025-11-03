@@ -62,14 +62,14 @@ class Task:
         inputs: Args | None = None,
     ) -> None:
         self._worker: Worker = worker or Worker()
-        self._uuid = uuid
-        self._script = script
-        self._inputs = inputs
+        self._uuid: str | None = uuid
+        self._script: str | None = script
+        self._inputs: Args | None = inputs
         self._finished = False
-        self._thread = None
+        self._thread: Thread | None = None
 
         # Public-facing fields for use within the task script.
-        self.outputs = {}
+        self.outputs: Args = {}
         self.cancel_requested = False
 
     def export(self, **kwargs):
@@ -80,7 +80,7 @@ class Task:
         message: str | None = None,
         current: int | None = None,
         maximum: int | None = None,
-        info: dict[str, Any] | None = None,
+        info: Args | None = None,
     ) -> None:
         args = {}
         if message is not None:
@@ -195,9 +195,9 @@ class Task:
 
 class Worker:
     def __init__(self):
-        self.tasks = {}
+        self.tasks: dict[str, Task] = {}
         self.queue: list[Task] = []
-        self.exports = {}
+        self.exports[str, Any] = {}
 
         # Flag this process as a worker, not a service.
         _set_worker(True)

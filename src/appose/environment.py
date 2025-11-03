@@ -42,8 +42,8 @@ from .service import Service
 
 class Environment:
     def __init__(self, base: Path | str, use_system_path: bool = False):
-        self.base = Path(base).absolute()
-        self.use_system_path = use_system_path
+        self.base: Path = Path(base).absolute()
+        self.use_system_path: bool = use_system_path
 
     def python(self) -> Service:
         """
