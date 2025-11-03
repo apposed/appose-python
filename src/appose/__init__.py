@@ -216,7 +216,8 @@ and successfully execute, such as an exception being raised.
 
 from pathlib import Path
 
-from .environment import Builder, Environment
+from .builder import Builder
+from .environment import Environment
 from .types import NDArray, SharedMemory  # noqa: F401
 
 
