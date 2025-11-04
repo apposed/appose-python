@@ -36,7 +36,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .paths import find_exe
+from .filepath import find_exe
 from .service import Service
 
 
