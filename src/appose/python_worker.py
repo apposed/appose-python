@@ -197,7 +197,7 @@ class Worker:
     def __init__(self):
         self.tasks: dict[str, Task] = {}
         self.queue: list[Task] = []
-        self.exports[str, Any] = {}
+        self.exports: dict[str, Any] = {}
 
         # Flag this process as a worker, not a service.
         _set_worker(True)
