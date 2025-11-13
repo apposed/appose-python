@@ -218,7 +218,7 @@ from pathlib import Path
 
 from .builder import Builder
 from .environment import Environment
-from .types import NDArray, SharedMemory  # noqa: F401
+from .shm import NDArray, SharedMemory  # noqa: F401
 
 
 def base(directory: Path) -> Builder:

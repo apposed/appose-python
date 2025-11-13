@@ -50,7 +50,8 @@ from typing import Any
 
 # NB: Avoid relative imports so that this script can be run standalone.
 from appose.service import RequestType, ResponseType
-from appose.types import Args, _set_worker, decode, encode
+from appose.util import types
+from appose.util.types import Args, decode, encode
 
 
 class Task:
@@ -200,7 +201,7 @@ class Worker:
         self.exports: dict[str, Any] = {}
 
         # Flag this process as a worker, not a service.
-        _set_worker(True)
+        types._worker_mode = True
 
     def run(self) -> None:
         """

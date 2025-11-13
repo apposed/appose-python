@@ -33,13 +33,11 @@ TODO
 
 from __future__ import annotations
 
-import json
 import re
 from math import ceil, prod
 from multiprocessing import resource_tracker, shared_memory
-from typing import Any
 
-Args = dict[str, Any]
+from .util import types
 
 
 class SharedMemory(shared_memory.SharedMemory):
@@ -70,7 +68,7 @@ class SharedMemory(shared_memory.SharedMemory):
         super().__init__(name=name, create=create, size=rsize)
         self.rsize: int = rsize
         self._unlink_on_dispose: bool = create
-        if _is_worker:
+        if types._worker_mode:
             # HACK: Remove this shared memory block from the resource_tracker,
             # which would otherwise want to clean up shared memory blocks
             # after all known references are done using them.
@@ -141,14 +139,6 @@ class SharedMemory(shared_memory.SharedMemory):
         self.dispose()
 
 
-def encode(data: Args) -> str:
-    return json.dumps(data, cls=_ApposeJSONEncoder, separators=(",", ":"))
-
-
-def decode(the_json: str) -> Args:
-    return json.loads(the_json, object_hook=_appose_object_hook)
-
-
 class NDArray:
     """
     Data structure for a multi-dimensional array.
@@ -204,46 +194,9 @@ class NDArray:
         self.shm.dispose()
 
 
-class _ApposeJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, SharedMemory):
-            return {
-                "appose_type": "shm",
-                "name": obj.name,
-                "rsize": obj.rsize,
-            }
-        if isinstance(obj, NDArray):
-            return {
-                "appose_type": "ndarray",
-                "dtype": obj.dtype,
-                "shape": obj.shape,
-                "shm": obj.shm,
-            }
-        return super().default(obj)
-
-
-def _appose_object_hook(obj: dict):
-    atype = obj.get("appose_type")
-    if atype == "shm":
-        # Attach to existing shared memory block.
-        return SharedMemory(name=(obj["name"]), rsize=(obj["rsize"]))
-    elif atype == "ndarray":
-        return NDArray(obj["dtype"], obj["shape"], obj["shm"])
-    else:
-        return obj
-
-
 def _bytes_per_element(dtype: str) -> int | float:
     try:
         bits = int(re.sub("[^0-9]", "", dtype))
     except ValueError:
         raise ValueError(f"Invalid dtype: {dtype}")
     return bits / 8
-
-
-_is_worker = False
-
-
-def _set_worker(value: bool) -> None:
-    global _is_worker
-    _is_worker = value

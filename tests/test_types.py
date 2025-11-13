@@ -30,6 +30,7 @@
 import unittest
 
 import appose
+from appose.util import types
 
 
 class TypesTest(unittest.TestCase):
@@ -97,7 +98,7 @@ class TypesTest(unittest.TestCase):
         with appose.NDArray("float32", [2, 20, 25]) as ndarray:
             shm_name = ndarray.shm.name
             data["ndArray"] = ndarray
-            json_str = appose.types.encode(data)
+            json_str = types.encode(data)
             self.assertIsNotNone(json_str)
             expected = self.JSON.replace("SHM_NAME", shm_name)
             self.assertEqual(expected, json_str)
@@ -105,7 +106,7 @@ class TypesTest(unittest.TestCase):
     def test_decode(self):
         with appose.SharedMemory(create=True, rsize=4000) as shm:
             shm_name = shm.name
-            data = appose.types.decode(self.JSON.replace("SHM_NAME", shm_name))
+            data = types.decode(self.JSON.replace("SHM_NAME", shm_name))
             self.assertIsNotNone(data)
             self.assertEqual(19, len(data))
             self.assertEqual(123, data["posByte"])

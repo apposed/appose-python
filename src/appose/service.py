@@ -41,7 +41,7 @@ from traceback import format_exc
 from typing import Any, Callable
 from uuid import uuid4
 
-from .types import Args, decode, encode
+from .util.types import Args, decode, encode
 
 
 class Service:
@@ -55,7 +55,7 @@ class Service:
     _service_count: int = 0
 
     def __init__(self, cwd: str | Path, args: list[str]) -> None:
-        self._cwd: str | Path = cwd
+        self._cwd: Path = Path(cwd)
         self._args: list[str] = args[:]
         self._tasks: dict[str, "Task"] = {}
         self._service_id: int = Service._service_count
