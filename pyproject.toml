@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "appose"
-version = "0.7.3.dev0"
+version = "0.8.0.dev0"
 description = "Appose: multi-language interprocess cooperation with shared memory."
 license = "BSD-2-Clause"
 authors = [{name = "Appose developers"}]
@@ -16,6 +16,7 @@ classifiers = [
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

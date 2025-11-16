@@ -5,11 +5,12 @@
 Utility functions and constants for platform-specific logic.
 """
 
+from __future__ import annotations
+
 import os
 import platform
 from enum import Enum
 from pathlib import Path
-from typing import List
 
 
 class OperatingSystem(Enum):
@@ -122,7 +123,7 @@ def is_executable(file: Path) -> bool:
         return file.exists() and os.access(file, os.X_OK)
 
 
-def base_command() -> List[str]:
+def base_command() -> list[str]:
     """
     Gets the arguments to prefix to execute a command in a separate process.
 

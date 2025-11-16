@@ -42,8 +42,67 @@ from .service import Service
 
 class Environment:
     def __init__(self, base: Path | str, use_system_path: bool = False):
-        self.base: Path = Path(base).absolute()
+        self.base_path: Path = Path(base).absolute()
         self.use_system_path: bool = use_system_path
+
+    def base(self) -> str:
+        """
+        Returns the base directory of this environment.
+
+        Returns:
+            The absolute path to the base directory
+        """
+        return str(self.base_path)
+
+    def bin_paths(self) -> list[str]:
+        """
+        Returns the list of binary directories to search for executables.
+
+        Returns:
+            List of binary directory paths
+        """
+        # Default implementation - subclasses should override
+        return [str(self.base_path / "bin")]
+
+    def launch_args(self) -> list[str]:
+        """
+        Returns the launch arguments to prepend when starting worker processes.
+
+        Returns:
+            List of launch arguments
+        """
+        # Default implementation - subclasses should override
+        return []
+
+    def env_vars(self) -> dict[str, str]:
+        """
+        Returns environment variables to set when launching worker processes.
+
+        Returns:
+            Dictionary of environment variable names to values
+        """
+        # Default implementation - subclasses should override
+        return {}
+
+    def builder(self):
+        """
+        Returns the builder that created this environment.
+
+        Returns:
+            The builder instance, or None if not created via a builder
+        """
+        # Default implementation - subclasses should override
+        return None
+
+    def type(self) -> str:
+        """
+        Returns the type of this environment (e.g., "pixi", "mamba", "uv", "system").
+
+        Returns:
+            The environment type name
+        """
+        builder = self.builder()
+        return builder.name() if builder else "unknown"
 
     def python(self) -> Service:
         """
@@ -157,16 +216,26 @@ class Environment:
         if not exes:
             raise ValueError("No executable given")
 
-        dirs: list[str] = (
-            os.environ["PATH"].split(os.pathsep)
-            if self.use_system_path
-            else [self.base]
-        )
+        # Get binary paths from environment configuration
+        bin_paths = self.bin_paths()
+
+        # Add system PATH if use_system_path is enabled
+        dirs: list[str] = bin_paths if bin_paths else []
+        if self.use_system_path:
+            dirs.extend(os.environ["PATH"].split(os.pathsep))
+
+        # Fall back to base directory if no bin paths configured
+        if not dirs:
+            dirs = [str(self.base_path)]
 
         exe_file = find_exe(dirs, exes)
         if exe_file is None:
             raise ValueError(f"No executables found amongst candidates: {exes}")
 
-        all_args: list[str] = [str(exe_file)]
+        # Prepend launch args from environment configuration
+        all_args: list[str] = []
+        all_args.extend(self.launch_args())
+        all_args.append(str(exe_file))
         all_args.extend(args)
-        return Service(self.base, all_args)
+
+        return Service(self.base(), all_args)

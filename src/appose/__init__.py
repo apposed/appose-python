@@ -216,22 +216,32 @@ and successfully execute, such as an exception being raised.
 
 from pathlib import Path
 
-from .builder import Builder
+from .builder import SimpleBuilder
 from .environment import Environment
 from .shm import NDArray, SharedMemory  # noqa: F401
 
 
-def base(directory: Path) -> Builder:
-    return Builder().base(directory)
+def base(directory: Path) -> SimpleBuilder:
+    """
+    Create a simple builder with a custom base directory.
 
+    Args:
+        directory: The base directory for the environment
 
-def java(vendor: str, version: str) -> Builder:
-    return Builder().java(vendor=vendor, version=version)
-
-
-def conda(environment_yaml: Path) -> Builder:
-    return Builder().conda(environment_yaml=environment_yaml)
+    Returns:
+        A SimpleBuilder instance configured with the given directory
+    """
+    return SimpleBuilder().base(directory)
 
 
 def system(directory: Path = Path(".")) -> Environment:
-    return Builder().base(directory).use_system_path().build()
+    """
+    Create a simple environment using system executables.
+
+    Args:
+        directory: The working directory (defaults to current directory)
+
+    Returns:
+        An Environment that uses system PATH for finding executables
+    """
+    return SimpleBuilder().base(directory).append_system_path().build()

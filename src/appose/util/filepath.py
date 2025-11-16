@@ -233,5 +233,24 @@ def ensure_directory(file: Path) -> None:
     """
     if not file.exists():
         raise IOError(f"Directory does not exist: {file}")
-    if not file.is_file():
+    if not file.is_dir():
         raise IOError(f"Not a directory: {file}")
+
+
+def appose_envs_dir() -> str:
+    """
+    Gets the top-level directory for Appose-managed environments.
+    Defaults to ~/.local/share/appose but can be overridden by setting
+    the APPOSE_ENVS_DIR environment variable.
+
+    Returns:
+        The directory housing all Appose-managed environments.
+    """
+    import os
+
+    envs_dir = os.environ.get("APPOSE_ENVS_DIR")
+    if envs_dir:
+        return envs_dir
+
+    user_home = Path.home()
+    return str(user_home / ".local" / "share" / "appose")
