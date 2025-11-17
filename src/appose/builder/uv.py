@@ -108,20 +108,112 @@ class UvBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
+        from ..tool.uv import Uv
+
         env_dir = self._env_dir()
 
-        # Check if this is already a uv virtual environment.
-        is_uv_venv = (env_dir / "pyvenv.cfg").is_file()
+        # Check for incompatible existing environments
+        if (env_dir / ".pixi").is_dir():
+            raise BuildException(
+                self,
+                f"Cannot use UvBuilder: environment already managed by Pixi at {env_dir}",
+            )
+        if (env_dir / "conda-meta").is_dir():
+            raise BuildException(
+                self,
+                f"Cannot use UvBuilder: environment already managed by Mamba/Conda at {env_dir}",
+            )
 
-        if is_uv_venv and self.source_content is None and not self.packages:
-            # Environment already exists and no new config/packages, just use it.
+        uv = Uv()
+
+        # Set up progress/output consumers
+        uv.set_output_consumer(
+            lambda msg: [sub(msg) for sub in self.output_subscribers]
+        )
+        uv.set_error_consumer(lambda msg: [sub(msg) for sub in self.error_subscribers])
+        uv.set_download_progress_consumer(
+            lambda cur, max: [
+                sub("Downloading uv", cur, max) for sub in self.progress_subscribers
+            ]
+        )
+
+        # Pass along intended build configuration
+        uv.set_env_vars(self.env_vars_dict)
+        uv.set_flags(self.flags_list)
+
+        # Check for unsupported features
+        if self.channels_list:
+            raise BuildException(
+                self,
+                "UvBuilder does not yet support programmatic index configuration. "
+                "Please specify custom indices in your requirements.txt file using "
+                "'--index-url' or '--extra-index-url' directives.",
+            )
+
+        try:
+            uv.install()
+
+            # Check if this is already a uv virtual environment
+            is_uv_venv = (env_dir / "pyvenv.cfg").is_file()
+
+            if is_uv_venv and self.source_content is None and not self.packages:
+                # Environment already exists and no new config/packages, just use it
+                return self._create_environment(env_dir)
+
+            # Handle source-based build (file or content)
+            if self.source_content is not None:
+                # Infer scheme if not explicitly set
+                if self.scheme is None:
+                    self.scheme = self._scheme().name()
+
+                if self.scheme not in ["requirements.txt", "pyproject.toml"]:
+                    raise BuildException(
+                        self,
+                        f"UvBuilder only supports requirements.txt and pyproject.toml schemes, got: {self.scheme}",
+                    )
+
+                if self.scheme == "pyproject.toml":
+                    # Handle pyproject.toml - uses uv sync
+                    # Create envDir if it doesn't exist
+                    if not env_dir.exists():
+                        env_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Write pyproject.toml to envDir
+                    pyproject_file = env_dir / "pyproject.toml"
+                    pyproject_file.write_text(self.source_content, encoding="utf-8")
+
+                    # Run uv sync to create .venv and install dependencies
+                    uv.sync(env_dir, self.python_version)
+                else:
+                    # Handle requirements.txt - traditional venv + pip install
+                    # Create virtual environment if it doesn't exist
+                    if not is_uv_venv:
+                        uv.create_venv(env_dir, self.python_version)
+
+                    # Write requirements.txt to envDir
+                    reqs_file = env_dir / "requirements.txt"
+                    reqs_file.write_text(self.source_content, encoding="utf-8")
+
+                    # Install packages from requirements.txt
+                    uv.pip_install_from_requirements(env_dir, str(reqs_file.absolute()))
+            else:
+                # Programmatic package building
+                if not is_uv_venv:
+                    # Create virtual environment
+                    uv.create_venv(env_dir, self.python_version)
+
+                # Install packages
+                if self.packages:
+                    all_packages = list(self.packages)
+                    # Always include appose if we're installing packages
+                    if "appose" not in all_packages:
+                        all_packages.append("appose")
+                    uv.pip_install(env_dir, *all_packages)
+
             return self._create_environment(env_dir)
 
-        # TODO: Implement actual uv environment building for new environments
-        raise NotImplementedError(
-            "UvBuilder.build() is not yet fully implemented. "
-            "Currently only supports wrapping existing environments."
-        )
+        except (IOError, KeyboardInterrupt) as e:
+            raise BuildException(self, cause=e)
 
     def wrap(self, env_dir: str | Path) -> Environment:
         """
@@ -172,13 +264,15 @@ class UvBuilder(BaseBuilder):
         """
         from ..util.platform import is_windows
 
-        base = str(env_dir.absolute())
+        # Convert to absolute path for consistency
+        env_dir_abs = env_dir.absolute()
+        base = str(env_dir_abs)
 
         # Determine venv location based on project structure.
         # If .venv exists, it's a pyproject.toml-managed project (uv sync).
         # Otherwise, env_dir itself is the venv (uv venv + pip install).
-        venv_dir = env_dir / ".venv"
-        actual_venv_dir = venv_dir if venv_dir.exists() else env_dir
+        venv_dir = env_dir_abs / ".venv"
+        actual_venv_dir = venv_dir if venv_dir.exists() else env_dir_abs
 
         # uv virtual environments use standard venv structure.
         bin_dir = "Scripts" if is_windows() else "bin"

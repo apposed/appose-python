@@ -44,7 +44,6 @@ from .test_builder_base import cowsay_and_assert
 TEST_RESOURCES = Path(__file__).parent / "resources" / "envs"
 
 
-@pytest.mark.skip(reason="build() not implemented for PixiBuilder yet")
 def test_conda():
     """Tests the builder-agnostic API with an environment.yml file."""
     env = (
@@ -57,7 +56,6 @@ def test_conda():
     cowsay_and_assert(env, "moo")
 
 
-@pytest.mark.skip(reason="build() not implemented for PixiBuilder yet")
 def test_pixi():
     """Tests building from a pixi.toml file."""
     env = (
@@ -70,7 +68,6 @@ def test_pixi():
     cowsay_and_assert(env, "baa")
 
 
-@pytest.mark.skip(reason="build() not implemented for PixiBuilder yet")
 def test_pixi_builder_api():
     """Tests the programmatic builder API for pixi."""
     env = (
@@ -112,7 +109,6 @@ def test_pixi_appose_requirement():
         )
 
 
-@pytest.mark.skip(reason="build() not implemented for PixiBuilder yet")
 def test_pixi_pyproject():
     """Tests building from a pyproject.toml with pixi config."""
     env = (
@@ -125,7 +121,6 @@ def test_pixi_pyproject():
     cowsay_and_assert(env, "pixi-pyproject")
 
 
-@pytest.mark.skip(reason="build() not implemented for PixiBuilder yet")
 def test_content_api():
     """Tests building environment from content string using type-specific builder."""
     pixi_toml = """[project]
@@ -152,7 +147,6 @@ cowsay = "==6.1"
     cowsay_and_assert(env, "content!")
 
 
-@pytest.mark.skip(reason="build() not implemented for DynamicBuilder yet")
 def test_content_environment_yml():
     """Tests auto-detecting builder from environment.yml content string."""
     env_yml = """name: content-env-yml
@@ -178,7 +172,6 @@ dependencies:
     cowsay_and_assert(env, "yml!")
 
 
-@pytest.mark.skip(reason="build() not implemented for DynamicBuilder yet")
 def test_content_pixi_toml():
     """Tests auto-detecting builder from pixi.toml content string."""
     pixi_toml = """[project]

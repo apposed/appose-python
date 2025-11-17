@@ -220,6 +220,8 @@ from .builder import SimpleBuilder
 from .environment import Environment
 from .shm import NDArray, SharedMemory  # noqa: F401
 
+__version__ = "0.7.3.dev0"
+
 
 def base(directory: Path) -> SimpleBuilder:
     """

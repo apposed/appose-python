@@ -194,7 +194,7 @@ class Tool(ABC):
         if not self.is_installed():
             raise RuntimeError(f"{self.name} is not installed")
 
-        self._do_exec(cwd, silent=False, include_flags=True, *args)
+        self._do_exec(cwd=cwd, silent=False, include_flags=True, args=args)
 
     def _exec_direct(self, *args: str) -> None:
         """
@@ -207,7 +207,7 @@ class Tool(ABC):
         Raises:
             IOError: If an I/O error occurs.
         """
-        self._do_exec(None, silent=True, include_flags=False, *args)
+        self._do_exec(cwd=None, silent=True, include_flags=False, args=args)
 
     def _download(self) -> Path:
         """
@@ -276,7 +276,7 @@ class Tool(ABC):
             self._download_progress_consumer(current, total)
 
     def _do_exec(
-        self, cwd: Path | None, silent: bool, include_flags: bool, *args: str
+        self, cwd: Path | None, silent: bool, include_flags: bool, args: tuple[str, ...]
     ) -> None:
         """
         Executes a tool command with the specified arguments.
@@ -285,7 +285,7 @@ class Tool(ABC):
             cwd: Working directory for the command (None to use tool's root directory).
             silent: If False, pass command output along to external listeners.
             include_flags: If True, include self._flags in the command argument list.
-            *args: Command arguments for the tool.
+            args: Command arguments for the tool.
 
         Raises:
             IOError: If an I/O error occurs or command fails.

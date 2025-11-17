@@ -31,7 +31,6 @@
 
 from pathlib import Path
 
-import pytest
 
 from appose.builder.uv import UvBuilder
 
@@ -42,7 +41,6 @@ from .test_builder_base import cowsay_and_assert
 TEST_RESOURCES = Path(__file__).parent / "resources" / "envs"
 
 
-@pytest.mark.skip(reason="build() not implemented for UvBuilder yet")
 def test_uv():
     """Tests building from a requirements.txt file."""
     env = (
@@ -55,7 +53,6 @@ def test_uv():
     cowsay_and_assert(env, "uv")
 
 
-@pytest.mark.skip(reason="build() not implemented for UvBuilder yet")
 def test_uv_builder_api():
     """Tests the programmatic builder API for uv."""
     env = (
@@ -69,7 +66,6 @@ def test_uv_builder_api():
     cowsay_and_assert(env, "fast")
 
 
-@pytest.mark.skip(reason="build() not implemented for UvBuilder yet")
 def test_uv_pyproject():
     """Tests building from a pyproject.toml file."""
     env = (

@@ -61,11 +61,30 @@ Conda-based environment manager, implemented by delegating to micromamba.
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
-from typing import Callable
+
+from . import Tool
+from ..util import download, filepath, platform
 
 
-class Mamba:
+def _micromamba_platform() -> str | None:
+    """Returns the platform string for micromamba download."""
+    platform_str = platform.PLATFORM
+
+    mapping = {
+        "LINUX|X64": "linux-64",
+        "LINUX|ARM64": "linux-aarch64",
+        "LINUX|PPC64LE": "linux-ppc64le",
+        "MACOS|X64": "osx-64",
+        "MACOS|ARM64": "osx-arm64",
+        "WINDOWS|X64": "win-64",
+    }
+
+    return mapping.get(platform_str)
+
+
+class Mamba(Tool):
     """
     Conda-based environment manager, implemented by delegating to micromamba.
 
@@ -81,10 +100,17 @@ class Mamba:
     """
 
     # Path where Appose installs Micromamba by default
-    BASE_PATH = None  # TODO: Get from util.environment or similar
+    BASE_PATH = str(Path(filepath.appose_envs_dir()) / ".mamba")
+
+    # The platform string for micromamba download
+    MICROMAMBA_PLATFORM = _micromamba_platform()
 
     # URL from where Micromamba is downloaded to be installed
-    MICROMAMBA_URL = None  # TODO: Build based on platform detection
+    MICROMAMBA_URL = (
+        f"https://micro.mamba.pm/api/micromamba/{MICROMAMBA_PLATFORM}/latest"
+        if MICROMAMBA_PLATFORM
+        else None
+    )
 
     def __init__(self, rootdir: str | None = None):
         """
@@ -93,110 +119,56 @@ class Mamba:
         Args:
             rootdir: The root dir for Mamba installation. If None, uses BASE_PATH.
         """
-        self.name = "micromamba"
-        self.rootdir = rootdir if rootdir else self.BASE_PATH
-        self.url = self.MICROMAMBA_URL
-        self.command = self._build_command_path()
+        root = rootdir if rootdir else self.BASE_PATH
 
-        # Consumers and configuration
-        self.output_consumer: Callable[[str], None] | None = None
-        self.error_consumer: Callable[[str], None] | None = None
-        self.download_progress_consumer: Callable[[int, int], None] | None = None
-        self.env_vars: dict[str, str] = {}
-        self.flags: list[str] = []
-
-        # Captured output
-        self.captured_output: list[str] = []
-        self.captured_error: list[str] = []
-
-    def _build_command_path(self) -> str:
-        """Build the path to the micromamba executable."""
-        # TODO: Implement based on platform detection
-        # Windows: Library/bin/micromamba.exe
-        # Unix: bin/micromamba
-        import platform
-
-        if platform.system() == "Windows":
-            return str(Path(self.rootdir) / "Library" / "bin" / "micromamba.exe")
+        # Determine micromamba relative path based on platform
+        if platform.is_windows():
+            mamba_relative_path = Path("Library") / "bin" / "micromamba.exe"
         else:
-            return str(Path(self.rootdir) / "bin" / "micromamba")
+            mamba_relative_path = Path("bin") / "micromamba"
 
-    def set_output_consumer(self, consumer: Callable[[str], None]) -> None:
-        """Sets a consumer to receive standard output from the tool process."""
-        self.output_consumer = consumer
+        command_path = str(Path(root) / mamba_relative_path)
 
-    def set_error_consumer(self, consumer: Callable[[str], None]) -> None:
-        """Sets a consumer to receive standard error from the tool process."""
-        self.error_consumer = consumer
+        super().__init__("micromamba", self.MICROMAMBA_URL, command_path, root)
 
-    def set_download_progress_consumer(
-        self, consumer: Callable[[int, int], None]
-    ) -> None:
-        """Sets a consumer to track download progress during tool installation."""
-        self.download_progress_consumer = consumer
-
-    def set_env_vars(self, env_vars: dict[str, str]) -> None:
-        """Sets environment variables to be passed to tool processes."""
-        if env_vars:
-            self.env_vars = dict(env_vars)
-
-    def set_flags(self, flags: list[str]) -> None:
-        """Sets additional command-line flags to pass to tool commands."""
-        if flags:
-            self.flags = list(flags)
-
-    def version(self) -> str:
+    def _decompress(self, archive: Path) -> None:
         """
-        Get the version of the installed tool.
-
-        Returns:
-            The version string.
-
-        Raises:
-            IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
-        """
-        # TODO: Implement
-        raise NotImplementedError("version() not yet implemented")
-
-    def install(self) -> None:
-        """
-        Downloads and installs the external tool.
-
-        Raises:
-            IOError: If an I/O error occurs.
-            InterruptedError: If interrupted during installation.
-        """
-        # TODO: Implement
-        raise NotImplementedError("install() not yet implemented")
-
-    def is_installed(self) -> bool:
-        """
-        Gets whether the tool is installed or not.
-
-        Returns:
-            True if the tool is installed, False otherwise.
-        """
-        try:
-            self.version()
-            return True
-        except (IOError, InterruptedError, NotImplementedError):
-            return False
-
-    def exec(self, *args: str) -> None:
-        """
-        Executes a tool command with the specified arguments in the tool's root directory.
+        Decompresses and installs micromamba from the downloaded archive.
 
         Args:
-            args: Command arguments for the tool.
+            archive: Path to the downloaded archive file.
 
         Raises:
-            IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
-            RuntimeError: If the tool has not been installed.
+            IOError: If decompression/installation fails.
         """
-        # TODO: Implement
-        raise NotImplementedError("exec() not yet implemented")
+        # Create temporary tar file
+        temp_tar_fd, temp_tar_path = tempfile.mkstemp(suffix=".tar")
+        temp_tar = Path(temp_tar_path)
+
+        try:
+            # Decompress bzip2 to tar
+            download.un_bzip2(archive, temp_tar)
+
+            # Create mamba base directory
+            mamba_base_dir = Path(self.rootdir)
+            if not mamba_base_dir.is_dir():
+                mamba_base_dir.mkdir(parents=True, exist_ok=True)
+
+            # Extract tar
+            download.un_tar(temp_tar, mamba_base_dir)
+
+            # Verify micromamba binary exists
+            mm_file = Path(self.command)
+            if not mm_file.exists():
+                raise IOError(f"Expected micromamba binary is missing: {self.command}")
+
+            # Set executable permission if needed
+            if not platform.is_executable(mm_file):
+                mm_file.chmod(mm_file.stat().st_mode | 0o111)
+
+        finally:
+            # Clean up temporary file
+            temp_tar.unlink(missing_ok=True)
 
     def create(self, env_dir: Path) -> None:
         """
@@ -208,7 +180,6 @@ class Mamba:
 
         Raises:
             IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
             RuntimeError: if Micromamba has not been installed
         """
         self.exec("create", "--prefix", str(env_dir.absolute()), "-y", "--no-rc")
@@ -223,7 +194,6 @@ class Mamba:
 
         Raises:
             IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
             RuntimeError: if Micromamba has not been installed
         """
         self.exec(

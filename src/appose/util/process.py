@@ -74,17 +74,21 @@ def builder(
 
 
 def run(
-    process: subprocess.Popen,
-    output: Callable[[str], None] | None = None,
-    error: Callable[[str], None] | None = None,
+    cmd: list[str] | subprocess.Popen,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    output_consumer: Callable[[str], None] | None = None,
+    error_consumer: Callable[[str], None] | None = None,
 ) -> int:
     """
     Runs a process and captures stdout and stderr, reporting output to consumers.
 
     Args:
-        process: The process to run.
-        output: Consumer of stdout content.
-        error: Consumer of stderr content.
+        cmd: Either a list of command arguments or an existing Popen object.
+        cwd: Working directory for the command (only used if cmd is a list).
+        env: Environment variables to set (only used if cmd is a list).
+        output_consumer: Consumer of stdout content.
+        error_consumer: Consumer of stderr content.
 
     Returns:
         Exit code of the process.
@@ -93,13 +97,33 @@ def run(
         IOError: If an I/O error occurs.
         InterruptedError: If interrupted while reading.
     """
+    # Create process if needed
+    if isinstance(cmd, list):
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
+
+        working_dir = str(cwd) if cwd else None
+
+        process = subprocess.Popen(
+            cmd,
+            cwd=working_dir,
+            env=process_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+    else:
+        process = cmd
+
     main_thread = threading.current_thread()
     io_exception = [None]
     interrupted_exception = [None]
 
     def read_streams():
         try:
-            _read_streams(process, main_thread, output, error)
+            _read_streams(process, main_thread, output_consumer, error_consumer)
         except IOError as e:
             io_exception[0] = e
         except InterruptedError as e:

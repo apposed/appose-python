@@ -216,26 +216,41 @@ class Environment:
         if not exes:
             raise ValueError("No executable given")
 
-        # Get binary paths from environment configuration
-        bin_paths = self.bin_paths()
+        # Calculate exe string.
+        launch_args_list = self.launch_args()
+        if launch_args_list:
+            # When there are launchArgs (e.g., "pixi run" or "mamba run"), use the bare
+            # executable name. The launcher will activate the environment and find the
+            # executable. This approach also avoids issues with pixi/mamba not properly
+            # handling executable paths containing spaces.
+            exe_path = exes[0]
+        else:
+            # No launchArgs, so we need to find and use the full path to the executable.
+            # Get binary paths from environment configuration
+            bin_paths = self.bin_paths()
 
-        # Add system PATH if use_system_path is enabled
-        dirs: list[str] = bin_paths if bin_paths else []
-        if self.use_system_path:
-            dirs.extend(os.environ["PATH"].split(os.pathsep))
+            # Add system PATH if use_system_path is enabled
+            dirs: list[str] = bin_paths if bin_paths else []
+            if self.use_system_path:
+                dirs.extend(os.environ["PATH"].split(os.pathsep))
 
-        # Fall back to base directory if no bin paths configured
-        if not dirs:
-            dirs = [str(self.base_path)]
+            # Fall back to base directory if no bin paths configured
+            if not dirs:
+                dirs = [str(self.base_path)]
 
-        exe_file = find_exe(dirs, exes)
-        if exe_file is None:
-            raise ValueError(f"No executables found amongst candidates: {exes}")
+            exe_file = find_exe(dirs, exes)
+            if exe_file is None:
+                raise ValueError(f"No executables found amongst candidates: {exes}")
 
-        # Prepend launch args from environment configuration
+            # Use absolute path instead of relative path to preserve symlinks.
+            # This is important for Python virtual environments where the python symlink
+            # needs to be used directly (not the resolved target) for proper site-packages access.
+            exe_path = str(exe_file.absolute())
+
+        # Construct final args list: launchArgs + exe + args
         all_args: list[str] = []
-        all_args.extend(self.launch_args())
-        all_args.append(str(exe_file))
+        all_args.extend(launch_args_list)
+        all_args.append(exe_path)
         all_args.extend(args)
 
         return Service(self.base(), all_args)

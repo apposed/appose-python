@@ -78,19 +78,91 @@ class MambaBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
+        from ..tool.mamba import Mamba
+
         env_dir = self._env_dir()
+
+        # Check for incompatible existing environments
+        if (env_dir / ".pixi").is_dir():
+            raise BuildException(
+                self,
+                f"Cannot use MambaBuilder: environment already managed by Pixi at {env_dir}",
+            )
+        if (env_dir / "pyvenv.cfg").exists():
+            raise BuildException(
+                self,
+                f"Cannot use MambaBuilder: environment already managed by uv/venv at {env_dir}",
+            )
+
+        # Create Mamba tool instance early so it's available for wrapping
+        mamba = Mamba()
 
         # Is this env_dir an already-existing conda directory?
         is_conda_dir = (env_dir / "conda-meta").is_dir()
         if is_conda_dir:
-            # Environment already exists, just wrap it.
-            return self._create_environment(env_dir)
+            # Environment already exists, just wrap it
+            return self._create_environment(env_dir, mamba)
 
-        # TODO: Implement actual Mamba environment building for new environments
-        raise NotImplementedError(
-            "MambaBuilder.build() is not yet fully implemented. "
-            "Currently only supports wrapping existing environments."
+        # Building a new environment - config content is required
+        if self.source_content is None:
+            raise BuildException(
+                self, "No source specified for MambaBuilder. Use .file() or .content()"
+            )
+
+        # Infer scheme if not explicitly set
+        if self.scheme is None:
+            self.scheme = self._scheme().name()
+
+        if self.scheme != "environment.yml":
+            raise BuildException(
+                self,
+                f"MambaBuilder only supports environment.yml scheme, got: {self.scheme}",
+            )
+
+        # Set up progress/output consumers
+        mamba.set_output_consumer(
+            lambda msg: [sub(msg) for sub in self.output_subscribers]
         )
+        mamba.set_error_consumer(
+            lambda msg: [sub(msg) for sub in self.error_subscribers]
+        )
+        mamba.set_download_progress_consumer(
+            lambda cur, max: [
+                sub("Downloading micromamba", cur, max)
+                for sub in self.progress_subscribers
+            ]
+        )
+
+        # Pass along intended build configuration
+        mamba.set_env_vars(self.env_vars_dict)
+        mamba.set_flags(self.flags_list)
+
+        # Check for unsupported features
+        if self.channels_list:
+            raise BuildException(
+                self,
+                "MambaBuilder does not yet support programmatic channel configuration. "
+                "Please specify channels in your environment.yml file.",
+            )
+
+        try:
+            mamba.install()
+
+            # Two-step build: create empty env, write config, then update
+            # Step 1: Create empty environment
+            mamba.create(env_dir)
+
+            # Step 2: Write environment.yml to envDir
+            env_yaml = env_dir / "environment.yml"
+            env_yaml.write_text(self.source_content, encoding="utf-8")
+
+            # Step 3: Update environment from yml
+            mamba.update(env_dir, env_yaml)
+
+            return self._create_environment(env_dir, mamba)
+
+        except (IOError, KeyboardInterrupt) as e:
+            raise BuildException(self, cause=e)
 
     def wrap(self, env_dir: str | Path) -> Environment:
         """
@@ -120,20 +192,23 @@ class MambaBuilder(BaseBuilder):
         self.base(env_path)
         return self.build()
 
-    def _create_environment(self, env_dir: Path) -> Environment:
+    def _create_environment(self, env_dir: Path, mamba) -> Environment:
         """
         Creates an Environment for the given Mamba/conda directory.
 
         Args:
             env_dir: The Mamba/conda environment directory
+            mamba: The Mamba tool instance
 
         Returns:
             Environment configured for this Mamba/conda installation
         """
-        base = str(env_dir.absolute())
-        # micromamba command - will be found via system PATH or installed micromamba
-        launch_args = ["micromamba", "run", "-p", base]
-        bin_paths = [str(env_dir / "bin")]
+        # Convert to absolute path for consistency
+        env_dir_abs = env_dir.absolute()
+        base = str(env_dir_abs)
+        # Use the installed micromamba command (full path)
+        launch_args = [mamba.command, "run", "-p", base]
+        bin_paths = [str(env_dir_abs / "bin")]
 
         return self._create_env(base, bin_paths, launch_args)
 

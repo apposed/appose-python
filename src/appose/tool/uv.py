@@ -35,10 +35,36 @@ uv is a fast Python package installer and resolver written in Rust.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+
+from . import Tool
+from ..util import download, filepath, platform
 
 
-class Uv:
+def _uv_binary() -> str | None:
+    """Returns the filename to download for the current platform."""
+    platform_str = platform.PLATFORM
+
+    mapping = {
+        "MACOS|ARM64": "uv-aarch64-apple-darwin.tar.gz",  # Apple Silicon macOS
+        "MACOS|X64": "uv-x86_64-apple-darwin.tar.gz",  # Intel macOS
+        "WINDOWS|ARM64": "uv-aarch64-pc-windows-msvc.zip",  # ARM64 Windows
+        "WINDOWS|X32": "uv-i686-pc-windows-msvc.zip",  # x86 Windows
+        "WINDOWS|X64": "uv-x86_64-pc-windows-msvc.zip",  # x64 Windows
+        "LINUX|ARM64": "uv-aarch64-unknown-linux-gnu.tar.gz",  # ARM64 Linux
+        "LINUX|X32": "uv-i686-unknown-linux-gnu.tar.gz",  # x86 Linux
+        "LINUX|PPC64": "uv-powerpc64-unknown-linux-gnu.tar.gz",  # PPC64 Linux
+        "LINUX|PPC64LE": "uv-powerpc64le-unknown-linux-gnu.tar.gz",  # PPC64LE Linux
+        "LINUX|RV64GC": "uv-riscv64gc-unknown-linux-gnu.tar.gz",  # RISCV Linux
+        "LINUX|S390X": "uv-s390x-unknown-linux-gnu.tar.gz",  # S390x Linux
+        "LINUX|X64": "uv-x86_64-unknown-linux-gnu.tar.gz",  # x64 Linux
+        "LINUX|ARMV7": "uv-armv7-unknown-linux-gnueabihf.tar.gz",  # ARMv7 Linux
+        "LINUX|ARMV6": "uv-arm-unknown-linux-musleabihf.tar.gz",  # ARMv6 MUSL Linux
+    }
+
+    return mapping.get(platform_str)
+
+
+class Uv(Tool):
     """
     uv-based environment manager.
 
@@ -54,10 +80,17 @@ class Uv:
     UV_VERSION = "0.9.5"
 
     # Path where Appose installs uv by default (.uv subdirectory thereof)
-    BASE_PATH = None  # TODO: Get from util.environment or similar
+    BASE_PATH = filepath.appose_envs_dir()
+
+    # The filename to download for the current platform
+    UV_BINARY = _uv_binary()
 
     # URL from where uv is downloaded to be installed
-    UV_URL = None  # TODO: Build based on platform detection
+    UV_URL = (
+        f"https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/{UV_BINARY}"
+        if UV_BINARY
+        else None
+    )
 
     def __init__(self, rootdir: str | None = None):
         """
@@ -66,110 +99,81 @@ class Uv:
         Args:
             rootdir: The root dir for uv installation. If None, uses BASE_PATH.
         """
-        self.name = "uv"
-        self.rootdir = rootdir if rootdir else self.BASE_PATH
-        self.url = self.UV_URL
-        self.command = self._build_command_path()
+        root = rootdir if rootdir else self.BASE_PATH
 
-        # Consumers and configuration
-        self.output_consumer: Callable[[str], None] | None = None
-        self.error_consumer: Callable[[str], None] | None = None
-        self.download_progress_consumer: Callable[[int, int], None] | None = None
-        self.env_vars: dict[str, str] = {}
-        self.flags: list[str] = []
-
-        # Captured output
-        self.captured_output: list[str] = []
-        self.captured_error: list[str] = []
-
-    def _build_command_path(self) -> str:
-        """Build the path to the uv executable."""
-        # TODO: Implement based on platform detection
-        # Windows: .uv/bin/uv.exe
-        # Unix: .uv/bin/uv
-        import platform
-
-        if platform.system() == "Windows":
-            return str(Path(self.rootdir) / ".uv" / "bin" / "uv.exe")
+        # Determine uv relative path based on platform
+        if platform.is_windows():
+            uv_relative_path = Path(".uv") / "bin" / "uv.exe"
         else:
-            return str(Path(self.rootdir) / ".uv" / "bin" / "uv")
+            uv_relative_path = Path(".uv") / "bin" / "uv"
 
-    def set_output_consumer(self, consumer: Callable[[str], None]) -> None:
-        """Sets a consumer to receive standard output from the tool process."""
-        self.output_consumer = consumer
+        command_path = str(Path(root) / uv_relative_path)
 
-    def set_error_consumer(self, consumer: Callable[[str], None]) -> None:
-        """Sets a consumer to receive standard error from the tool process."""
-        self.error_consumer = consumer
+        super().__init__("uv", self.UV_URL, command_path, root)
 
-    def set_download_progress_consumer(
-        self, consumer: Callable[[int, int], None]
-    ) -> None:
-        """Sets a consumer to track download progress during tool installation."""
-        self.download_progress_consumer = consumer
-
-    def set_env_vars(self, env_vars: dict[str, str]) -> None:
-        """Sets environment variables to be passed to tool processes."""
-        if env_vars:
-            self.env_vars = dict(env_vars)
-
-    def set_flags(self, flags: list[str]) -> None:
-        """Sets additional command-line flags to pass to tool commands."""
-        if flags:
-            self.flags = list(flags)
-
-    def version(self) -> str:
+    def _decompress(self, archive: Path) -> None:
         """
-        Get the version of the installed tool.
-
-        Returns:
-            The version string.
-
-        Raises:
-            IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
-        """
-        # TODO: Implement
-        raise NotImplementedError("version() not yet implemented")
-
-    def install(self) -> None:
-        """
-        Downloads and installs the external tool.
-
-        Raises:
-            IOError: If an I/O error occurs.
-            InterruptedError: If interrupted during installation.
-        """
-        # TODO: Implement
-        raise NotImplementedError("install() not yet implemented")
-
-    def is_installed(self) -> bool:
-        """
-        Gets whether the tool is installed or not.
-
-        Returns:
-            True if the tool is installed, False otherwise.
-        """
-        try:
-            self.version()
-            return True
-        except (IOError, InterruptedError, NotImplementedError):
-            return False
-
-    def exec(self, *args: str) -> None:
-        """
-        Executes a tool command with the specified arguments in the tool's root directory.
+        Decompresses and installs uv from the downloaded archive.
 
         Args:
-            args: Command arguments for the tool.
+            archive: Path to the downloaded archive file.
 
         Raises:
-            IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
-            RuntimeError: If the tool has not been installed.
+            IOError: If decompression/installation fails.
         """
-        # TODO: Implement
-        raise NotImplementedError("exec() not yet implemented")
+        uv_base_dir = Path(self.rootdir)
+        if not uv_base_dir.is_dir():
+            uv_base_dir.mkdir(parents=True, exist_ok=True)
+
+        uv_bin_dir = uv_base_dir / ".uv" / "bin"
+        if not uv_bin_dir.exists():
+            uv_bin_dir.mkdir(parents=True, exist_ok=True)
+
+        # Extract archive
+        download.unpack(archive, uv_bin_dir)
+
+        uv_binary_name = "uv.exe" if platform.is_windows() else "uv"
+        uv_dest = Path(self.command)
+
+        # Check if uv binary is directly in bin dir (Windows ZIP case)
+        uv_directly = uv_bin_dir / uv_binary_name
+        if uv_directly.exists():
+            # Windows case: binaries are directly in uvBinDir
+            # Just ensure uv.exe is in the right place (uvCommand)
+            if uv_directly != uv_dest:
+                uv_directly.rename(uv_dest)
+            # uvw.exe and uvx.exe are already in the right place (uvBinDir)
+        else:
+            # Linux/macOS case: binaries are in uv-<platform>/ subdirectory
+            platform_dirs = [
+                f
+                for f in uv_bin_dir.iterdir()
+                if f.is_dir() and f.name.startswith("uv-")
+            ]
+            if not platform_dirs:
+                raise IOError(
+                    f"Expected uv binary or uv-<platform> directory not found in: {uv_bin_dir}"
+                )
+
+            platform_dir = platform_dirs[0]
+
+            # Move all binaries from platform subdirectory to bin directory
+            for binary in platform_dir.iterdir():
+                dest = uv_bin_dir / binary.name
+                binary.rename(dest)
+                # Set executable permission
+                if not platform.is_executable(dest):
+                    dest.chmod(dest.stat().st_mode | 0o111)
+
+            # Clean up the now-empty platform directory
+            platform_dir.rmdir()
+
+        if not uv_dest.exists():
+            raise IOError(f"Expected uv binary is missing: {self.command}")
+
+        # Set executable permission if needed
+        if not platform.is_executable(uv_dest):
+            uv_dest.chmod(uv_dest.stat().st_mode | 0o111)
 
     def create_venv(self, env_dir: Path, python_version: str | None = None) -> None:
         """
@@ -181,7 +185,6 @@ class Uv:
 
         Raises:
             IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
             RuntimeError: if uv has not been installed
         """
         args = ["venv"]
@@ -200,9 +203,10 @@ class Uv:
 
         Raises:
             IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
             RuntimeError: if uv has not been installed
         """
+        if not packages:
+            return
         args = ["pip", "install", "--python", str(env_dir.absolute()), *packages]
         self.exec(*args)
 
@@ -218,7 +222,6 @@ class Uv:
 
         Raises:
             IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
             RuntimeError: if uv has not been installed
         """
         self.exec(
@@ -241,13 +244,11 @@ class Uv:
 
         Raises:
             IOError: If an I/O error occurs.
-            InterruptedError: If the current thread is interrupted.
             RuntimeError: if uv has not been installed
         """
         args = ["sync"]
         if python_version:
             args.extend(["--python", python_version])
 
-        # Run uv sync with working directory set to projectDir.
-        # TODO: This would need exec() to support a cwd parameter
-        self.exec(*args)
+        # Run uv sync with working directory set to projectDir
+        self.exec(*args, cwd=project_dir)

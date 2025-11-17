@@ -105,35 +105,148 @@ class PixiBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
+        from ..tool.pixi import Pixi
+
         env_dir = self._env_dir()
 
-        # Check if this is already a pixi project.
-        is_pixi_dir = (
-            (env_dir / "pixi.toml").is_file()
-            or (env_dir / "pyproject.toml").is_file()
-            or (env_dir / ".pixi").is_dir()
+        # Check for incompatible existing environments
+        if (env_dir / "conda-meta").exists() and not (env_dir / ".pixi").exists():
+            raise BuildException(
+                self,
+                f"Cannot use PixiBuilder: environment already managed by Mamba/Conda at {env_dir}",
+            )
+        if (env_dir / "pyvenv.cfg").exists():
+            raise BuildException(
+                self,
+                f"Cannot use PixiBuilder: environment already managed by uv/venv at {env_dir}",
+            )
+
+        pixi = Pixi()
+
+        # Set up progress/output consumers
+        pixi.set_output_consumer(
+            lambda msg: [sub(msg) for sub in self.output_subscribers]
+        )
+        pixi.set_error_consumer(
+            lambda msg: [sub(msg) for sub in self.error_subscribers]
+        )
+        pixi.set_download_progress_consumer(
+            lambda cur, max: [
+                sub("Downloading pixi", cur, max) for sub in self.progress_subscribers
+            ]
         )
 
-        if (
-            is_pixi_dir
-            and self.source_content is None
-            and not self.conda_packages
-            and not self.pypi_packages
-        ):
-            # Environment already exists, just use it.
-            return self._create_environment(env_dir)
+        # Pass along intended build configuration
+        pixi.set_env_vars(self.env_vars_dict)
+        pixi.set_flags(self.flags_list)
 
-        # Handle source-based build (file or content).
-        if self.source_content is not None:
-            if is_pixi_dir:
-                # Already initialized, just use it.
-                return self._create_environment(env_dir)
+        try:
+            pixi.install()
 
-        # TODO: Implement actual Pixi environment building for new environments
-        raise NotImplementedError(
-            "PixiBuilder.build() is not yet fully implemented. "
-            "Currently only supports wrapping existing environments."
-        )
+            # Check if this is already a pixi project
+            is_pixi_dir = (
+                (env_dir / "pixi.toml").is_file()
+                or (env_dir / "pyproject.toml").is_file()
+                or (env_dir / ".pixi").is_dir()
+            )
+
+            if (
+                is_pixi_dir
+                and self.source_content is None
+                and not self.conda_packages
+                and not self.pypi_packages
+            ):
+                # Environment already exists, just use it
+                return self._create_environment(env_dir, pixi)
+
+            # Handle source-based build (file or content)
+            if self.source_content is not None:
+                # Infer scheme if not explicitly set
+                if self.scheme is None:
+                    self.scheme = self._scheme().name()
+
+                if not env_dir.exists():
+                    env_dir.mkdir(parents=True, exist_ok=True)
+
+                if self.scheme == "pixi.toml":
+                    # Write pixi.toml to envDir
+                    pixi_toml_file = env_dir / "pixi.toml"
+                    pixi_toml_file.write_text(self.source_content, encoding="utf-8")
+                elif self.scheme == "pyproject.toml":
+                    # Write pyproject.toml to envDir (Pixi natively supports it)
+                    pyproject_toml_file = env_dir / "pyproject.toml"
+                    pyproject_toml_file.write_text(
+                        self.source_content, encoding="utf-8"
+                    )
+                elif self.scheme == "environment.yml":
+                    # Write environment.yml and import
+                    environment_yaml_file = env_dir / "environment.yml"
+                    environment_yaml_file.write_text(
+                        self.source_content, encoding="utf-8"
+                    )
+                    # Only run init --import if pixi.toml doesn't exist yet
+                    # (importing creates pixi.toml, so this avoids "pixi.toml already exists" error)
+                    if not (env_dir / "pixi.toml").exists():
+                        pixi.exec(
+                            "init",
+                            "--import",
+                            str(environment_yaml_file.absolute()),
+                            str(env_dir.absolute()),
+                        )
+
+                # Add any programmatic channels to augment source file
+                if self.channels_list:
+                    pixi.add_channels(env_dir, *self.channels_list)
+            else:
+                # Programmatic package building
+                if is_pixi_dir:
+                    # Already initialized, just use it
+                    return self._create_environment(env_dir, pixi)
+
+                if not env_dir.exists():
+                    env_dir.mkdir(parents=True, exist_ok=True)
+
+                pixi.init(env_dir)
+
+                # Fail fast for vacuous environments
+                if not self.conda_packages and not self.pypi_packages:
+                    raise BuildException(
+                        self,
+                        "Cannot build empty environment programmatically. "
+                        "Either provide a source file via Appose.pixi(source), or add packages via .conda() or .pypi().",
+                    )
+
+                # Add channels
+                if self.channels_list:
+                    pixi.add_channels(env_dir, *self.channels_list)
+
+                # Add conda packages
+                if self.conda_packages:
+                    pixi.add_conda_packages(env_dir, *self.conda_packages)
+
+                # Add PyPI packages
+                if self.pypi_packages:
+                    pixi.add_pypi_packages(env_dir, *self.pypi_packages)
+
+                # Verify that appose was included when building programmatically
+                prog_build = bool(self.conda_packages) or bool(self.pypi_packages)
+                if prog_build:
+                    import re
+
+                    has_appose = any(
+                        re.match(r"^appose\b", pkg) for pkg in self.conda_packages
+                    ) or any(re.match(r"^appose\b", pkg) for pkg in self.pypi_packages)
+                    if not has_appose:
+                        raise BuildException(
+                            self,
+                            "Appose package must be explicitly included when building programmatically. "
+                            'Add .conda("appose") or .pypi("appose") to your builder.',
+                        )
+
+            return self._create_environment(env_dir, pixi)
+
+        except (IOError, KeyboardInterrupt) as e:
+            raise BuildException(self, cause=e)
 
     def wrap(self, env_dir: str | Path) -> Environment:
         """
@@ -172,31 +285,34 @@ class PixiBuilder(BaseBuilder):
         self.base(env_path)
         return self.build()
 
-    def _create_environment(self, env_dir: Path) -> Environment:
+    def _create_environment(self, env_dir: Path, pixi) -> Environment:
         """
         Creates an Environment for the given Pixi directory.
 
         Args:
             env_dir: The Pixi environment directory
+            pixi: The Pixi tool instance
 
         Returns:
             Environment configured for this Pixi installation
         """
-        base = str(env_dir.absolute())
+        # Convert to absolute path for consistency
+        env_dir_abs = env_dir.absolute()
+        base = str(env_dir_abs)
 
         # Check which manifest file exists (pyproject.toml takes precedence)
-        manifest_file = env_dir / "pyproject.toml"
+        manifest_file = env_dir_abs / "pyproject.toml"
         if not manifest_file.exists():
-            manifest_file = env_dir / "pixi.toml"
+            manifest_file = env_dir_abs / "pixi.toml"
 
-        # pixi command - will be found via system PATH or installed pixi
+        # Use the installed pixi command (full path)
         launch_args = [
-            "pixi",
+            pixi.command,
             "run",
             "--manifest-path",
             str(manifest_file.absolute()),
         ]
-        bin_paths = [str(env_dir / ".pixi" / "envs" / "default" / "bin")]
+        bin_paths = [str(env_dir_abs / ".pixi" / "envs" / "default" / "bin")]
 
         return self._create_env(base, bin_paths, launch_args)
 

@@ -162,7 +162,6 @@ def test_wrap_non_existent():
     assert "does not exist" in str(exc_info.value)
 
 
-@pytest.mark.skip(reason="build() not implemented for MambaBuilder yet")
 def test_wrap_and_rebuild():
     """Tests that preexisting (wrapped) environments can be rebuilt properly."""
     # Build an environment from a config file

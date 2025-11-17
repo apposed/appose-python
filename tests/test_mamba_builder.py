@@ -31,7 +31,6 @@
 
 from pathlib import Path
 
-import pytest
 
 from appose.builder import DynamicBuilder
 from appose.builder.mamba import MambaBuilder
@@ -43,7 +42,6 @@ from .test_builder_base import cowsay_and_assert
 TEST_RESOURCES = Path(__file__).parent / "resources" / "envs"
 
 
-@pytest.mark.skip(reason="build() not implemented for MambaBuilder yet")
 def test_explicit_mamba_builder():
     """Tests explicit mamba builder selection using .builder() method."""
     env = (
