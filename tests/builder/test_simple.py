@@ -36,7 +36,7 @@ from pathlib import Path
 
 from appose.builder import SimpleBuilder
 
-from .test_builder_base import assert_complete, maybe_debug
+from tests.test_base import assert_complete, maybe_debug
 
 
 def test_custom():

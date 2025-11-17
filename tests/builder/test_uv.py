@@ -27,38 +27,51 @@
 # #L%
 ###
 
-"""End-to-end tests for MambaBuilder."""
+"""End-to-end tests for UvBuilder."""
 
 from pathlib import Path
 
 
-from appose.builder import DynamicBuilder
-from appose.builder.mamba import MambaBuilder
+from appose.builder.uv import UvBuilder
 
-from .test_builder_base import cowsay_and_assert
+from tests.test_base import cowsay_and_assert
 
 
 # Get the path to test resources
-TEST_RESOURCES = Path(__file__).parent / "resources" / "envs"
+TEST_RESOURCES = Path(__file__).parent.parent / "resources" / "envs"
 
 
-def test_explicit_mamba_builder():
-    """Tests explicit mamba builder selection using .builder() method."""
+def test_uv():
+    """Tests building from a requirements.txt file."""
     env = (
-        DynamicBuilder(str(TEST_RESOURCES / "cowsay.yml"))
-        .builder("mamba")
-        .base("target/envs/mamba-cowsay")
+        UvBuilder(str(TEST_RESOURCES / "cowsay-requirements.txt"))
+        .base("target/envs/uv-cowsay")
         .log_debug()
         .build()
     )
+    assert isinstance(env.builder(), UvBuilder)
+    cowsay_and_assert(env, "uv")
 
-    assert isinstance(env.builder(), MambaBuilder)
 
-    # Verify it actually used mamba by checking for conda-meta directory
-    env_base = Path(env.base())
-    conda_meta = env_base / "conda-meta"
-    assert conda_meta.exists() and conda_meta.is_dir(), (
-        "Environment should have conda-meta directory when using mamba builder"
+def test_uv_builder_api():
+    """Tests the programmatic builder API for uv."""
+    env = (
+        UvBuilder()
+        .include("cowsay==6.1")
+        .base("target/envs/uv-cowsay-builder")
+        .log_debug()
+        .build()
     )
+    assert isinstance(env.builder(), UvBuilder)
+    cowsay_and_assert(env, "fast")
 
-    cowsay_and_assert(env, "yay")
+
+def test_uv_pyproject():
+    """Tests building from a pyproject.toml file."""
+    env = (
+        UvBuilder(str(TEST_RESOURCES / "cowsay-pyproject.toml"))
+        .base("target/envs/uv-cowsay-pyproject")
+        .log_debug()
+        .build()
+    )
+    cowsay_and_assert(env, "pyproject")

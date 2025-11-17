@@ -37,11 +37,11 @@ import pytest
 from appose.builder import DynamicBuilder
 from appose.builder.pixi import PixiBuilder
 
-from .test_builder_base import cowsay_and_assert
+from tests.test_base import cowsay_and_assert
 
 
 # Get the path to test resources
-TEST_RESOURCES = Path(__file__).parent / "resources" / "envs"
+TEST_RESOURCES = Path(__file__).parent.parent / "resources" / "envs"
 
 
 def test_conda():

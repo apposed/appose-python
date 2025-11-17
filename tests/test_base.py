@@ -105,14 +105,20 @@ def execute_and_assert(service, script: str):
         assert update.status == TaskStatus.RUNNING
         assert update.message == f"[{i}] -> {v}"
         assert update.current == i
-        assert update.maximum == 0
+        assert (
+            update.maximum is None or update.maximum == 0
+        )  # Python uses None, Java uses 0
         assert update.error is None
 
     completion = events[92]
     assert completion.response_type == ResponseType.COMPLETION
     assert completion.message is None  # no message from non-UPDATE response
-    assert completion.current == 0  # no current from non-UPDATE response
-    assert completion.maximum == 0  # no maximum from non-UPDATE response
+    assert (
+        completion.current is None or completion.current == 0
+    )  # Python uses None, Java uses 0
+    assert (
+        completion.maximum is None or completion.maximum == 0
+    )  # Python uses None, Java uses 0
     assert completion.error is None
 
 

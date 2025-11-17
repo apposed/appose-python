@@ -1,6 +1,6 @@
 #!/bin/sh
 uv run stubgen --include-private -p appose -o api/
-uv run stubgen --include-private -o api tests/*.py
+uv run stubgen --include-private -o api tests/*.py tests/*/*.py
 
 # Transform .pyi inputs to .api outputs.
 # The .api files are merely lightly postprocessed stub files to
