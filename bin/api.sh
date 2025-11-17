@@ -11,4 +11,5 @@ do
     -e '/^from /d' -e '/^import /d' \
     -e "s/'Task'/Task/g" \
     "$pyi" > "${pyi%.pyi}.api"
+  rm "$pyi"
 done
