@@ -31,6 +31,8 @@ jobs:
       with:
         java-version: '8'
         distribution: 'zulu'
+        cache: 'maven'
+        cache-dependency-path: 'appose.pom'
 
     - name: Set up uv
       run: |
