@@ -13,3 +13,5 @@ do
     "$pyi" > "${pyi%.pyi}.api"
   rm "$pyi"
 done
+# Remove empty files.
+find api -size 0 -exec rm "{}" \;
