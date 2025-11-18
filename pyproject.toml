@@ -57,16 +57,5 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Thanks to Flake8-pyproject, we can configure flake8 here!
-[tool.flake8]
-exclude = ["bin", "build", "dist"]
-extend-ignore = ["E203"]
-# See https://black.readthedocs.io/en/stable/guides/using_black_with_other_tools.html#flake8
-max-line-length = 88
-min_python_version = "3.10"
- 
-[tool.isort]
-profile = "black"
-
 [tool.pytest.ini_options]
 addopts = "-s -p no:faulthandler"
