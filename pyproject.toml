@@ -9,7 +9,7 @@ description = "Appose: multi-language interprocess cooperation with shared memor
 license = "BSD-2-Clause"
 authors = [{name = "Appose developers"}]
 readme = "README.md"
-keywords = ["java", "javascript", "python", "cross-language", "interprocess"]
+keywords = ["java", "python", "cross-language", "interprocess"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
