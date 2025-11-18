@@ -40,11 +40,6 @@ Type safety is honor-system based: The interface you provide must match the
 actual methods and signatures of the remote object. If there's a mismatch,
 you'll get runtime errors from the worker process.
 
-Language compatibility: Proxy generation assumes dot-notation method syntax
-(obj.method(arg0, arg1)). This works for Python, Groovy, JavaScript, Ruby,
-and most dynamic languages. Languages with different calling conventions
-(e.g., R's obj$method()) are not currently supported.
-
 Usage pattern: First, create and export the remote object via a task,
 then create a proxy to interact with it:
 
