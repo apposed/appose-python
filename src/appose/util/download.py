@@ -193,7 +193,7 @@ def un_tar(input_file: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with tarfile.open(input_file, "r") as tar:
-        tar.extractall(path=output_dir, filter="data")
+        tar.extractall(path=output_dir)
 
 
 def un_tar_gz(input_file: Path, output_dir: Path) -> None:
@@ -214,7 +214,7 @@ def un_tar_gz(input_file: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with tarfile.open(input_file, "r:gz") as tar:
-        tar.extractall(path=output_dir, filter="data")
+        tar.extractall(path=output_dir)
 
 
 def un_tar_bz2(input_file: Path, output_dir: Path) -> None:
