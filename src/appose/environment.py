@@ -36,6 +36,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .syntax import GroovySyntax, PythonSyntax, ScriptSyntax
 from .util.filepath import find_exe
 from .service import Service
 
@@ -127,6 +128,7 @@ class Environment:
             python_exes,
             "-c",
             "import appose.python_worker; appose.python_worker.main()",
+            syntax=PythonSyntax(),
         )
 
     def groovy(
@@ -155,7 +157,10 @@ class Environment:
         :raises IOError: If something goes wrong starting the worker process.
         """
         return self.java(
-            "org.apposed.appose.GroovyWorker", class_path=class_path, jvm_args=jvm_args
+            "org.apposed.appose.GroovyWorker",
+            class_path=class_path,
+            jvm_args=jvm_args,
+            syntax=GroovySyntax(),
         )
 
     def java(
@@ -163,6 +168,7 @@ class Environment:
         main_class: str,
         class_path: list[str] | None = None,
         jvm_args: list[str] | None = None,
+        syntax: ScriptSyntax | None = None,
     ) -> Service:
         # Collect classpath elements into a set, to avoid duplicate entries.
         cp: dict[str] = {}  # NB: Use dict instead of set to maintain insertion order.
@@ -192,9 +198,11 @@ class Environment:
             "jre/bin/java",
             "jre/bin/java.exe",
         ]
-        return self.service(java_exes, *args)
+        return self.service(java_exes, *args, syntax=syntax)
 
-    def service(self, exes: list[str], *args) -> Service:
+    def service(
+        self, exes: list[str], *args, syntax: ScriptSyntax | None = None
+    ) -> Service:
         """
         Create a service with the given command line arguments.
 
@@ -253,4 +261,4 @@ class Environment:
         all_args.append(exe_path)
         all_args.extend(args)
 
-        return Service(self.base(), all_args)
+        return Service(self.base(), all_args, syntax)

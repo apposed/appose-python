@@ -41,7 +41,31 @@ from traceback import format_exc
 from typing import Any, Callable
 from uuid import uuid4
 
+from .syntax import ScriptSyntax
 from .util.types import Args, decode, encode
+
+
+class TaskException(Exception):
+    """
+    Exception raised when a Task fails to complete successfully.
+
+    This exception is raised by Task.wait_for() when the task finishes
+    in a non-successful state (FAILED, CANCELED, or CRASHED).
+    """
+
+    def __init__(self, message: str, task: "Task") -> None:
+        super().__init__(message)
+        self.task = task
+
+    @property
+    def status(self) -> "TaskStatus":
+        """Returns the status of the failed task."""
+        return self.task.status
+
+    @property
+    def task_error(self) -> str | None:
+        """Returns the error message from the task, if available."""
+        return self.task.error
 
 
 class Service:
@@ -54,7 +78,9 @@ class Service:
 
     _service_count: int = 0
 
-    def __init__(self, cwd: str | Path, args: list[str]) -> None:
+    def __init__(
+        self, cwd: str | Path, args: list[str], syntax: ScriptSyntax | None = None
+    ) -> None:
         self._cwd: Path = Path(cwd)
         self._args: list[str] = args[:]
         self._tasks: dict[str, "Task"] = {}
@@ -65,6 +91,16 @@ class Service:
         self._stderr_thread: threading.Thread | None = None
         self._monitor_thread: threading.Thread | None = None
         self._debug_callback: Callable[[Any], Any] | None = None
+        self._syntax: ScriptSyntax | None = syntax
+
+    def syntax(self) -> ScriptSyntax | None:
+        """
+        Returns the script syntax associated with this service.
+
+        Returns:
+            The script syntax, or None if not configured.
+        """
+        return self._syntax
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
         """
@@ -125,6 +161,110 @@ class Service:
         """
         self.start()
         return Task(self, script, inputs, queue)
+
+    def get_var(self, name: str) -> Any:
+        """
+        Retrieves a variable's value from the worker process's global scope.
+
+        The variable must have been previously exported using task.export()
+        to be accessible across tasks.
+
+        Args:
+            name: The name of the variable to retrieve.
+
+        Returns:
+            The value of the variable.
+
+        Raises:
+            TaskException: If the variable retrieval fails.
+            ValueError: If no script syntax has been configured for this service.
+        """
+        if self._syntax is None:
+            raise ValueError("No script syntax configured for this service")
+        script = self._syntax.get_var(name)
+        task = self.task(script).wait_for()
+        return task.outputs.get("result")
+
+    def put_var(self, name: str, value: Any) -> None:
+        """
+        Sets a variable in the worker process's global scope and exports it
+        for future use across tasks.
+
+        Args:
+            name: The name of the variable to set in the worker process.
+            value: The value to assign to the variable.
+
+        Raises:
+            TaskException: If the variable assignment fails.
+            ValueError: If no script syntax has been configured for this service.
+        """
+        if self._syntax is None:
+            raise ValueError("No script syntax configured for this service")
+        inputs = {"_value": value}
+        script = self._syntax.put_var(name, "_value")
+        self.task(script, inputs).wait_for()
+
+    def call(self, function: str, *args: Any) -> Any:
+        """
+        Calls a function in the worker process with the given arguments and
+        returns the result.
+
+        The function must be accessible in the worker's global scope (either
+        built-in or previously defined/imported).
+
+        Args:
+            function: The name of the function to call in the worker process.
+            *args: The arguments to pass to the function.
+
+        Returns:
+            The result of the function call.
+
+        Raises:
+            TaskException: If the function call fails.
+            ValueError: If no script syntax has been configured for this service.
+        """
+        if self._syntax is None:
+            raise ValueError("No script syntax configured for this service")
+        inputs = {}
+        var_names = []
+        for i, arg in enumerate(args):
+            var_name = f"arg{i}"
+            inputs[var_name] = arg
+            var_names.append(var_name)
+        script = self._syntax.call(function, var_names)
+        task = self.task(script, inputs).wait_for()
+        return task.outputs.get("result")
+
+    def proxy(self, var: str, api: type, queue: str | None = None) -> Any:
+        """
+        Creates a proxy object providing strongly typed access to a remote
+        object in this service's worker process.
+
+        Method calls on the proxy are transparently forwarded to the remote
+        object via Tasks.
+
+        Important: The variable must be explicitly exported using
+        task.export(varName=value) in a previous task. Only exported variables
+        are accessible across tasks within the same service.
+
+        Args:
+            var: The name of the exported variable in the worker process
+                 referencing the remote object.
+            api: The interface/protocol class that the proxy should implement.
+            queue: Optional queue identifier for task execution. Pass "main" to
+                   ensure execution on the worker's main thread.
+
+        Returns:
+            A proxy object that forwards method calls to the remote object.
+
+        Raises:
+            ValueError: If no script syntax has been configured for this service.
+        """
+        if self._syntax is None:
+            raise ValueError("No script syntax configured for this service")
+        from .util.proxy import create
+
+        return create(self, var, queue)
 
     def close(self) -> None:
         """
@@ -349,15 +489,55 @@ class Task:
 
             self.listeners.append(listener)
 
-    def wait_for(self) -> None:
+    def wait_for(self) -> "Task":
+        """
+        Wait for this task to complete.
+
+        Returns:
+            This task (for method chaining).
+
+        Raises:
+            TaskException: If the task fails, is canceled, or crashes.
+        """
         with self.cv:
             if self.status == TaskStatus.INITIAL:
                 self.start()
 
             if self.status not in (TaskStatus.QUEUED, TaskStatus.RUNNING):
-                return
+                # Task already finished - check if we need to raise
+                if self.status != TaskStatus.COMPLETE:
+                    self._raise_if_failed()
+                return self
 
             self.cv.wait()
+
+        # After waiting, check if task failed
+        self._raise_if_failed()
+        return self
+
+    def result(self) -> Any:
+        """
+        Returns the result of this task.
+
+        This is a convenience method that returns outputs["result"].
+        For tasks that return a single value (e.g., from an expression),
+        that value is stored in outputs["result"].
+
+        Returns:
+            The task's result value.
+        """
+        return self.outputs.get("result")
+
+    def _raise_if_failed(self) -> None:
+        """Raise TaskException if this task is in a failed state."""
+        if self.status == TaskStatus.FAILED:
+            error_msg = self.error if self.error else "Unknown error"
+            raise TaskException(f"Task failed: {error_msg}", self)
+        elif self.status == TaskStatus.CANCELED:
+            raise TaskException("Task was canceled", self)
+        elif self.status == TaskStatus.CRASHED:
+            error_msg = self.error if self.error else "Worker process crashed"
+            raise TaskException(f"Task crashed: {error_msg}", self)
 
     def cancel(self) -> None:
         """

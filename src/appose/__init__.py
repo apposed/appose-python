@@ -218,6 +218,7 @@ from pathlib import Path
 
 from .builder import SimpleBuilder
 from .environment import Environment
+from .service import TaskException  # noqa: F401
 from .shm import NDArray, SharedMemory  # noqa: F401
 
 __version__ = "0.7.3.dev0"

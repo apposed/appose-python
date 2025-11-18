@@ -27,10 +27,10 @@
 # #L%
 ###
 
-import os
 
 import appose
-from appose.service import ResponseType, Service, TaskStatus
+from appose.service import TaskStatus
+from tests.test_base import execute_and_assert, maybe_debug
 
 collatz_groovy = """
 // Computes the stopping time of a given value
@@ -155,66 +155,3 @@ def test_main_thread_queue_python():
         assert TaskStatus.COMPLETE == task.status
         thread = task.outputs.get("thread")
         assert thread != "MainThread"
-
-
-def execute_and_assert(service: Service, script: str):
-    task = service.task(script)
-
-    # Record the state of the task for each event that occurs.
-
-    class TaskState:
-        def __init__(self, event):
-            self.response_type = event.response_type
-            self.message = event.message
-            self.current = event.current
-            self.maximum = event.maximum
-            self.status = event.task.status
-            self.error = event.task.error
-
-    events = []
-    task.listen(lambda event: events.append(TaskState(event)))
-
-    # Wait for task to finish.
-    task.wait_for()
-
-    # Validate the execution result.
-    assert TaskStatus.COMPLETE == task.status
-    result = task.outputs["result"]
-    assert 91 == result
-
-    # Validate the events received.
-
-    assert 93 == len(events)
-
-    launch = events[0]
-    assert ResponseType.LAUNCH == launch.response_type
-    assert TaskStatus.RUNNING == launch.status
-    assert launch.message is None
-    assert launch.current is None
-    assert launch.maximum is None
-    assert launch.error is None
-
-    v = 9999
-    for i in range(91):
-        v = v // 2 if v % 2 == 0 else 3 * v + 1
-        update = events[i + 1]
-        assert ResponseType.UPDATE == update.response_type
-        assert TaskStatus.RUNNING == update.status
-        assert f"[{i}] -> {v}" == update.message
-        assert i == update.current
-        assert update.maximum is None
-        assert update.error is None
-
-    completion = events[92]
-    assert ResponseType.COMPLETION == completion.response_type
-    assert TaskStatus.COMPLETE == completion.status
-    assert completion.message is None  # no message from non-UPDATE response
-    assert completion.current is None  # no current from non-UPDATE response
-    assert completion.maximum is None  # no maximum from non-UPDATE response
-    assert completion.error is None
-
-
-def maybe_debug(service):
-    debug = os.getenv("DEBUG")
-    if debug:
-        service.debug(print)
