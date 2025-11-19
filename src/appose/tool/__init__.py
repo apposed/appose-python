@@ -198,8 +198,12 @@ class Tool(ABC):
 
     def _exec_direct(self, *args: str) -> None:
         """
-        Executes a tool command without validating installation,
-        without passing output to external listeners, and without including flags.
+        Executes a tool command with the specified arguments, without validating the
+        tool installation beforehand, without passing output to external listeners
+        (see set_output_consumer and set_error_consumer), and without including flags.
+
+        This method mainly exists for version() checking, and subclasses of Tool are
+        unlikely to need it—they should probably use exec(...) instead.
 
         Args:
             *args: Command arguments for the tool.
