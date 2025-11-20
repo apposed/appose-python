@@ -46,14 +46,10 @@ class UvBuilder(BaseBuilder):
     uv is a fast Python package installer and resolver.
     """
 
-    def __init__(self, source: str | None = None, scheme: str | None = None):
+    def __init__(self):
         super().__init__()
         self.python_version: str | None = None
         self.packages: list[str] = []
-        if source:
-            self.file(source)
-        if scheme:
-            self.scheme = scheme
 
     def name(self) -> str:
         return "uv"
@@ -289,20 +285,14 @@ class UvBuilderFactory:
     Factory for creating UvBuilder instances.
     """
 
-    def create_builder(
-        self, source: str | None = None, scheme: str | None = None
-    ) -> Builder:
+    def create_builder(self) -> Builder:
         """
         Creates a new UvBuilder instance.
-
-        Args:
-            source: Optional source file path
-            scheme: Optional scheme
 
         Returns:
             A new UvBuilder instance
         """
-        return UvBuilder(source, scheme)
+        return UvBuilder()
 
     def name(self) -> str:
         return "uv"
@@ -318,18 +308,6 @@ class UvBuilderFactory:
             True if supported
         """
         return scheme in ["requirements.txt", "pypi"]
-
-    def supports_source(self, source: str) -> bool:
-        """
-        Checks if this builder can build from the given source file.
-
-        Args:
-            source: The source file path
-
-        Returns:
-            True if supported
-        """
-        return source.endswith("requirements.txt") or source.endswith(".txt")
 
     def priority(self) -> float:
         """

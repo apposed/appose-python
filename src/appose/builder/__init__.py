@@ -357,21 +357,13 @@ class BuilderFactory(Protocol):
     the Builders utility class.
     """
 
-    def create_builder(
-        self, source: str | None = None, scheme: str | None = None
-    ) -> Builder:
+    def create_builder(self) -> Builder:
         """
-        Creates a new builder instance.
-
-        Args:
-            source: Optional source file path
-            scheme: Optional scheme (e.g., "environment.yml", "pixi.toml")
+        Creates a new builder instance with no configuration.
+        Configuration should be provided via the fluent API (e.g., content, scheme).
 
         Returns:
             A new builder instance
-
-        Raises:
-            BuildException: If the builder cannot be created
         """
         ...
 
@@ -393,19 +385,6 @@ class BuilderFactory(Protocol):
 
         Returns:
             True if this builder supports the scheme
-        """
-        ...
-
-    def supports_source(self, source: str) -> bool:
-        """
-        Checks if this builder can build from the given source file.
-        This allows builders to inspect file extensions or content to determine compatibility.
-
-        Args:
-            source: The source file path to check
-
-        Returns:
-            True if this builder can build from the source
         """
         ...
 
@@ -577,7 +556,9 @@ class BaseBuilder:
         """Get the scheme, detecting from content if needed."""
         if self.scheme:
             return Schemes.from_name(self.scheme)
-        return Schemes.from_content(self.source_content)
+        if self.source_content:
+            return Schemes.from_content(self.source_content)
+        raise ValueError("Cannot determine scheme: neither scheme nor content is set")
 
     def _create_env(
         self, base: str, bin_paths: list[str], launch_args: list[str]
@@ -743,16 +724,9 @@ class SimpleBuilderFactory:
     SimpleBuilder can wrap any directory as a fallback.
     """
 
-    def create_builder(
-        self, source: str | None = None, scheme: str | None = None
-    ) -> Builder:
+    def create_builder(self) -> Builder:
         """Create a SimpleBuilder instance."""
-        builder = SimpleBuilder()
-        if source:
-            builder.file(source)
-        if scheme:
-            builder.scheme(scheme)
-        return builder
+        return SimpleBuilder()
 
     def name(self) -> str:
         """Return the name of the builder."""
@@ -760,10 +734,6 @@ class SimpleBuilderFactory:
 
     def supports_scheme(self, scheme: str) -> bool:
         """SimpleBuilder doesn't support any specific schemes."""
-        return False
-
-    def supports_source(self, source: str) -> bool:
-        """SimpleBuilder doesn't support any specific source files."""
         return False
 
     def priority(self) -> float:
@@ -785,12 +755,11 @@ class SimpleBuilderFactory:
 class DynamicBuilder(BaseBuilder):
     """
     Dynamic builder that auto-detects the appropriate specific builder
-    based on source file and scheme.
+    based on configuration content and scheme.
     """
 
-    def __init__(self, source: str | None = None):
+    def __init__(self):
         super().__init__()
-        self.source = source
         self.builder_name: str | None = None
 
     def builder(self, builder_name: str) -> DynamicBuilder:
@@ -811,13 +780,13 @@ class DynamicBuilder(BaseBuilder):
 
     def build(self) -> Environment:
         """Build by delegating to the appropriate builder."""
-        delegate = self._create_builder(self.builder_name, self.source, self.scheme)
+        delegate = self._create_builder(self.builder_name, self.scheme)
         self._copy_config_to_delegate(delegate)
         return delegate.build()
 
     def rebuild(self) -> Environment:
         """Rebuild by delegating to the appropriate builder."""
-        delegate = self._create_builder(self.builder_name, self.source, self.scheme)
+        delegate = self._create_builder(self.builder_name, self.scheme)
         self._copy_config_to_delegate(delegate)
         return delegate.rebuild()
 
@@ -844,16 +813,15 @@ class DynamicBuilder(BaseBuilder):
     def _create_builder(
         self,
         name: str | None,
-        source: str | None,
         scheme: str | None,
     ) -> Builder:
-        """Create the appropriate builder based on name, source, and scheme."""
+        """Create the appropriate builder based on name and scheme."""
         # Find the builder matching the specified name, if any
         if name:
             factory = find_factory_by_name(name)
             if factory is None:
                 raise ValueError(f"Unknown builder: {name}")
-            return factory.create_builder(source, scheme)
+            return factory.create_builder()
 
         # Detect scheme from content if content is provided but scheme is not
         effective_scheme = scheme
@@ -865,18 +833,9 @@ class DynamicBuilder(BaseBuilder):
             factory = find_factory_by_scheme(effective_scheme)
             if factory is None:
                 raise ValueError(f"No builder supports scheme: {effective_scheme}")
-            return factory.create_builder(source, effective_scheme)
+            return factory.create_builder()
 
-        # Find the highest-priority builder that supports this source
-        if source:
-            factory = find_factory_by_source(source)
-            if factory is None:
-                raise ValueError(f"No builder supports source: {source}")
-            return factory.create_builder(source)
-
-        raise ValueError(
-            "At least one of builder name, source, content, and scheme must be non-null"
-        )
+        raise ValueError("Content and/or scheme must be provided for dynamic builder")
 
 
 # Builders utility class
@@ -1017,26 +976,6 @@ def find_factory_for_wrapping(env_dir: str | Path) -> BuilderFactory | None:
     factories = Builders._discover_factories()
     for factory in factories:
         if factory.can_wrap(env_dir):
-            return factory
-    return None
-
-
-def find_factory_by_source(source: str) -> BuilderFactory | None:
-    """
-    Finds the first factory that can build from the given source file.
-    Factories are checked in priority order (highest priority first).
-
-    Args:
-        source: The source file path to find a factory for
-
-    Returns:
-        The first factory that can build from the source, or None if none found
-    """
-    if source is None:
-        raise ValueError("Cannot auto-detect builder: no source specified")
-    factories = Builders._discover_factories()
-    for factory in factories:
-        if factory.supports_source(source):
             return factory
     return None
 

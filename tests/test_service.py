@@ -92,7 +92,7 @@ def test_python():
 
 
 def test_service_startup_failure():
-    env = appose.base("no-java-to-be-found-here").build()
+    env = appose.custom().base("no-java-to-be-found-here").build()
     try:
         with env.groovy():
             raise AssertionError("Groovy worker process started successfully!?")

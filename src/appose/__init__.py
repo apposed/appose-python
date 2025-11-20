@@ -214,9 +214,20 @@ and successfully execute, such as an exception being raised.
     }
 '''
 
+from __future__ import annotations
+
+import re
 from pathlib import Path
 
-from .builder import SimpleBuilder
+from .builder import (
+    BuildException,
+    DynamicBuilder,
+    SimpleBuilder,
+    find_factory_for_wrapping,
+)
+from .builder.pixi import PixiBuilder
+from .builder.mamba import MambaBuilder
+from .builder.uv import UvBuilder
 from .environment import Environment
 from .service import TaskException  # noqa: F401
 from .shm import NDArray, SharedMemory  # noqa: F401
@@ -224,22 +235,145 @@ from .shm import NDArray, SharedMemory  # noqa: F401
 __version__ = "0.7.3.dev0"
 
 
-def base(directory: Path) -> SimpleBuilder:
+def pixi(source: str | Path | None = None) -> PixiBuilder:
     """
-    Create a simple builder with a custom base directory.
+    Creates a PixiBuilder for Pixi-based environments.
 
     Args:
-        directory: The base directory for the environment
+        source: Optional configuration source (file path or URL)
 
     Returns:
-        A SimpleBuilder instance configured with the given directory
+        A PixiBuilder instance
     """
-    return SimpleBuilder().base(directory)
+    builder = PixiBuilder()
+    if source:
+        if isinstance(source, Path) or not _is_url(str(source)):
+            return builder.file(source)
+        else:
+            return builder.url(str(source))
+    return builder
 
 
-def system(directory: Path = Path(".")) -> Environment:
+def mamba(source: str | Path | None = None) -> MambaBuilder:
     """
-    Create a simple environment using system executables.
+    Creates a MambaBuilder for Micromamba-based environments.
+
+    Args:
+        source: Optional configuration source (file path or URL)
+
+    Returns:
+        A MambaBuilder instance
+    """
+    builder = MambaBuilder()
+    if source:
+        if isinstance(source, Path) or not _is_url(str(source)):
+            return builder.file(source)
+        else:
+            return builder.url(str(source))
+    return builder
+
+
+def uv(source: str | Path | None = None) -> UvBuilder:
+    """
+    Creates a UvBuilder for uv-based virtual environments.
+
+    Args:
+        source: Optional configuration source (file path or URL)
+
+    Returns:
+        A UvBuilder instance
+    """
+    builder = UvBuilder()
+    if source:
+        if isinstance(source, Path) or not _is_url(str(source)):
+            return builder.file(source)
+        else:
+            return builder.url(str(source))
+    return builder
+
+
+def file(source: str | Path) -> DynamicBuilder:
+    """
+    Creates a DynamicBuilder from a configuration file.
+    The builder type will be auto-detected from file content.
+
+    Args:
+        source: Path to configuration file
+
+    Returns:
+        A DynamicBuilder instance
+    """
+    return DynamicBuilder().file(source)
+
+
+def url(source: str) -> DynamicBuilder:
+    """
+    Creates a DynamicBuilder from a URL.
+    The builder type will be auto-detected from content.
+
+    Args:
+        source: URL to configuration file
+
+    Returns:
+        A DynamicBuilder instance
+    """
+    return DynamicBuilder().url(source)
+
+
+def content(config_content: str) -> DynamicBuilder:
+    """
+    Creates a DynamicBuilder from configuration content.
+    The builder type will be auto-detected from content syntax.
+
+    Args:
+        config_content: Configuration file content
+
+    Returns:
+        A DynamicBuilder instance
+    """
+    return DynamicBuilder().content(config_content)
+
+
+def wrap(env_dir: str | Path) -> Environment:
+    """
+    Wraps an existing environment directory, auto-detecting its type.
+
+    Args:
+        env_dir: The directory containing the environment
+
+    Returns:
+        An Environment configured for the detected type
+
+    Raises:
+        BuildException: If the directory doesn't exist
+    """
+    env_path = Path(env_dir)
+    if not env_path.exists():
+        raise BuildException(None, f"Environment directory does not exist: {env_dir}")
+
+    # Find a builder factory that can wrap this directory
+    factory = find_factory_for_wrapping(env_path)
+
+    if factory:
+        return factory.create_builder().wrap(env_path)
+
+    # Default to simple builder (no special activation)
+    return custom().wrap(env_path)
+
+
+def custom() -> SimpleBuilder:
+    """
+    Creates a SimpleBuilder for custom environments without package management.
+
+    Returns:
+        A SimpleBuilder instance
+    """
+    return SimpleBuilder()
+
+
+def system(directory: str | Path = Path(".")) -> Environment:
+    """
+    Creates a simple environment using system executables.
 
     Args:
         directory: The working directory (defaults to current directory)
@@ -248,3 +382,21 @@ def system(directory: Path = Path(".")) -> Environment:
         An Environment that uses system PATH for finding executables
     """
     return SimpleBuilder().base(directory).append_system_path().build()
+
+
+def _is_url(source: str) -> bool:
+    """
+    Check if string appears to be a URL.
+    Detects common URL schemes (http, https, ftp, file, jar) by using
+    a pattern of 3+ letter scheme followed by "://" to avoid matching
+    Windows drive letters like "C:".
+
+    Args:
+        source: The source string to check
+
+    Returns:
+        True if the string looks like a URL
+    """
+    if not source:
+        return False
+    return bool(re.match(r"^[a-z]{3,}://", source.lower()))

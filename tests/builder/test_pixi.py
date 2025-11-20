@@ -47,7 +47,8 @@ TEST_RESOURCES = Path(__file__).parent.parent / "resources" / "envs"
 def test_conda():
     """Tests the builder-agnostic API with an environment.yml file."""
     env = (
-        DynamicBuilder(str(TEST_RESOURCES / "cowsay.yml"))
+        DynamicBuilder()
+        .file(str(TEST_RESOURCES / "cowsay.yml"))
         .base("target/envs/conda-cowsay")
         .log_debug()
         .build()
@@ -59,7 +60,8 @@ def test_conda():
 def test_pixi():
     """Tests building from a pixi.toml file."""
     env = (
-        PixiBuilder(str(TEST_RESOURCES / "cowsay-pixi.toml"))
+        PixiBuilder()
+        .file(str(TEST_RESOURCES / "cowsay-pixi.toml"))
         .base("target/envs/pixi-cowsay")
         .log_debug()
         .build()
@@ -112,7 +114,8 @@ def test_pixi_appose_requirement():
 def test_pixi_pyproject():
     """Tests building from a pyproject.toml with pixi config."""
     env = (
-        PixiBuilder(str(TEST_RESOURCES / "cowsay-pixi-pyproject.toml"))
+        PixiBuilder()
+        .file(str(TEST_RESOURCES / "cowsay-pixi-pyproject.toml"))
         .base("target/envs/pixi-cowsay-pyproject")
         .log_debug()
         .build()

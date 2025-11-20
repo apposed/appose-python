@@ -45,14 +45,10 @@ class PixiBuilder(BaseBuilder):
     Pixi is a modern package manager supporting both conda and PyPI packages.
     """
 
-    def __init__(self, source: str | None = None, scheme: str | None = None):
+    def __init__(self):
         super().__init__()
         self.conda_packages: list[str] = []
         self.pypi_packages: list[str] = []
-        if source:
-            self.file(source)
-        if scheme:
-            self.scheme = scheme
 
     def name(self) -> str:
         return "pixi"
@@ -322,20 +318,14 @@ class PixiBuilderFactory:
     Factory for creating PixiBuilder instances.
     """
 
-    def create_builder(
-        self, source: str | None = None, scheme: str | None = None
-    ) -> Builder:
+    def create_builder(self) -> Builder:
         """
         Creates a new PixiBuilder instance.
-
-        Args:
-            source: Optional source file path
-            scheme: Optional scheme
 
         Returns:
             A new PixiBuilder instance
         """
-        return PixiBuilder(source, scheme)
+        return PixiBuilder()
 
     def name(self) -> str:
         return "pixi"
@@ -351,22 +341,6 @@ class PixiBuilderFactory:
             True if supported
         """
         return scheme in ["pixi.toml", "environment.yml", "conda", "pypi"]
-
-    def supports_source(self, source: str) -> bool:
-        """
-        Checks if this builder can build from the given source file.
-
-        Args:
-            source: The source file path
-
-        Returns:
-            True if supported
-        """
-        return (
-            source.endswith("pixi.toml")
-            or source.endswith(".yml")
-            or source.endswith(".yaml")
-        )
 
     def priority(self) -> float:
         """

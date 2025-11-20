@@ -44,7 +44,8 @@ TEST_RESOURCES = Path(__file__).parent.parent / "resources" / "envs"
 def test_uv():
     """Tests building from a requirements.txt file."""
     env = (
-        UvBuilder(str(TEST_RESOURCES / "cowsay-requirements.txt"))
+        UvBuilder()
+        .file(str(TEST_RESOURCES / "cowsay-requirements.txt"))
         .base("target/envs/uv-cowsay")
         .log_debug()
         .build()
@@ -69,7 +70,8 @@ def test_uv_builder_api():
 def test_uv_pyproject():
     """Tests building from a pyproject.toml file."""
     env = (
-        UvBuilder(str(TEST_RESOURCES / "cowsay-pyproject.toml"))
+        UvBuilder()
+        .file(str(TEST_RESOURCES / "cowsay-pyproject.toml"))
         .base("target/envs/uv-cowsay-pyproject")
         .log_debug()
         .build()

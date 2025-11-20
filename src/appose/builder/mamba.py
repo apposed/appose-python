@@ -46,12 +46,8 @@ class MambaBuilder(BaseBuilder):
     Mamba/Micromamba provides fast conda environment management.
     """
 
-    def __init__(self, source: str | None = None, scheme: str | None = None):
+    def __init__(self):
         super().__init__()
-        if source:
-            self.file(source)
-        if scheme:
-            self.scheme = scheme
 
     def name(self) -> str:
         return "mamba"
@@ -218,20 +214,14 @@ class MambaBuilderFactory:
     Factory for creating MambaBuilder instances.
     """
 
-    def create_builder(
-        self, source: str | None = None, scheme: str | None = None
-    ) -> Builder:
+    def create_builder(self) -> Builder:
         """
         Creates a new MambaBuilder instance.
-
-        Args:
-            source: Optional source file path
-            scheme: Optional scheme
 
         Returns:
             A new MambaBuilder instance
         """
-        return MambaBuilder(source, scheme)
+        return MambaBuilder()
 
     def name(self) -> str:
         return "mamba"
@@ -247,18 +237,6 @@ class MambaBuilderFactory:
             True if supported
         """
         return scheme == "environment.yml"
-
-    def supports_source(self, source: str) -> bool:
-        """
-        Checks if this builder can build from the given source file.
-
-        Args:
-            source: The source file path
-
-        Returns:
-            True if supported
-        """
-        return source.endswith(".yml") or source.endswith(".yaml")
 
     def priority(self) -> float:
         """
