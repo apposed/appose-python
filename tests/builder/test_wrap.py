@@ -33,7 +33,8 @@ from pathlib import Path
 
 import pytest
 
-from appose.builder import BuildException, SimpleBuilder, find_factory_for_wrapping
+import appose
+from appose.builder import BuildException, SimpleBuilder
 from appose.builder.mamba import MambaBuilder
 from appose.builder.pixi import PixiBuilder
 
@@ -52,10 +53,7 @@ def test_wrap_pixi():
     pixi_toml.touch()
 
     try:
-        factory = find_factory_for_wrapping(pixi_dir)
-        assert factory is not None, "Should find a factory for pixi environment"
-
-        pixi_env = factory.create_builder().wrap(pixi_dir)
+        pixi_env = appose.wrap(pixi_dir)
         assert pixi_env is not None
         assert isinstance(pixi_env.builder(), PixiBuilder)
         assert pixi_env.base() == str(pixi_dir.absolute())
@@ -79,10 +77,7 @@ def test_wrap_mamba():
     conda_meta.mkdir(parents=True, exist_ok=True)
 
     try:
-        factory = find_factory_for_wrapping(conda_dir)
-        assert factory is not None, "Should find a factory for conda/mamba environment"
-
-        conda_env = factory.create_builder().wrap(conda_dir)
+        conda_env = appose.wrap(conda_dir)
         assert conda_env is not None
         assert conda_env.base() == str(conda_dir.absolute())
         assert conda_env.launch_args() is not None
@@ -105,13 +100,10 @@ def test_wrap_uv():
     pyvenv_cfg.touch()
 
     try:
-        factory = find_factory_for_wrapping(uv_dir)
-        assert factory is not None, "Should find a factory for uv environment"
-
-        uv_env = factory.create_builder().wrap(uv_dir)
+        uv_env = appose.wrap(uv_dir)
         assert uv_env is not None
         assert uv_env.base() == str(uv_dir.absolute())
-        # uv environments use standard venv structure with no special launch args
+        # uv environments use standard venv structure with no special launch args.
         assert len(uv_env.launch_args()) == 0, (
             "uv environment should have no special launcher"
         )
@@ -128,17 +120,11 @@ def test_wrap_custom():
     custom_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        factory = find_factory_for_wrapping(custom_dir)
-        # SimpleBuilder should be able to wrap any directory
-        assert factory is not None, (
-            "Should find a factory (SimpleBuilder) for plain directory"
-        )
-
-        custom_env = factory.create_builder().wrap(custom_dir)
+        custom_env = appose.wrap(custom_dir)
         assert custom_env is not None
         assert isinstance(custom_env.builder(), SimpleBuilder)
         assert custom_env.base() == str(custom_dir.absolute())
-        # SimpleBuilder uses empty launch args by default
+        # SimpleBuilder uses empty launch args by default.
         assert len(custom_env.launch_args()) == 0, (
             "Custom environment should have no special launcher"
         )
@@ -152,46 +138,36 @@ def test_wrap_non_existent():
     non_existent = Path("target/does-not-exist")
 
     with pytest.raises(BuildException) as exc_info:
-        factory = find_factory_for_wrapping(non_existent)
-        if factory:
-            factory.create_builder().wrap(non_existent)
-        else:
-            # If no factory found, manually trigger the expected error
-            raise BuildException(None, f"Directory does not exist: {non_existent}")
+        appose.wrap(non_existent)
 
     assert "does not exist" in str(exc_info.value)
 
 
 def test_wrap_and_rebuild():
     """Tests that preexisting (wrapped) environments can be rebuilt properly."""
-    # Build an environment from a config file
+    # Build an environment from a config file.
     env_dir = Path("target/envs/mamba-wrap-rebuild-test")
-
-    factory = find_factory_for_wrapping(env_dir)
-    if factory is None:
-        pytest.skip("Cannot find factory for mamba builder")
-
     env1 = (
-        factory.create_builder(str(TEST_RESOURCES / "cowsay.yml"))
+        appose.mamba(str(TEST_RESOURCES / "cowsay.yml"))
         .base(env_dir)
         .log_debug()
         .build()
     )
     assert env1 is not None
 
-    # Wrap the environment (simulating restarting the application)
-    env2 = factory.create_builder().wrap(env_dir)
+    # Wrap the environment (simulating restarting the application).
+    env2 = appose.wrap(env_dir)
     assert env2 is not None
     assert env2.base() == str(env_dir.absolute())
     assert env2.builder() is not None, "Wrapped environment should have a builder"
 
-    # Verify that the builder detected the config file
+    # Verify that the builder detected the config file.
     assert isinstance(env2.builder(), MambaBuilder)
 
-    # Rebuild the wrapped environment
+    # Rebuild the wrapped environment.
     env3 = env2.builder().rebuild()
     assert env3 is not None
     assert env3.base() == str(env_dir.absolute())
 
-    # Verify the rebuilt environment works
+    # Verify the rebuilt environment works.
     cowsay_and_assert(env3, "rebuilt")

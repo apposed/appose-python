@@ -320,7 +320,7 @@ def url(source: str) -> DynamicBuilder:
     return DynamicBuilder().url(source)
 
 
-def content(config_content: str) -> DynamicBuilder:
+def content(content: str) -> DynamicBuilder:
     """
     Creates a DynamicBuilder from configuration content.
     The builder type will be auto-detected from content syntax.
@@ -331,7 +331,7 @@ def content(config_content: str) -> DynamicBuilder:
     Returns:
         A DynamicBuilder instance
     """
-    return DynamicBuilder().content(config_content)
+    return DynamicBuilder().content(content)
 
 
 def wrap(env_dir: str | Path) -> Environment:
@@ -361,16 +361,6 @@ def wrap(env_dir: str | Path) -> Environment:
     return custom().wrap(env_path)
 
 
-def custom() -> SimpleBuilder:
-    """
-    Creates a SimpleBuilder for custom environments without package management.
-
-    Returns:
-        A SimpleBuilder instance
-    """
-    return SimpleBuilder()
-
-
 def system(directory: str | Path = Path(".")) -> Environment:
     """
     Creates a simple environment using system executables.
@@ -382,6 +372,16 @@ def system(directory: str | Path = Path(".")) -> Environment:
         An Environment that uses system PATH for finding executables
     """
     return SimpleBuilder().base(directory).append_system_path().build()
+
+
+def custom() -> SimpleBuilder:
+    """
+    Creates a SimpleBuilder for custom environments without package management.
+
+    Returns:
+        A SimpleBuilder instance
+    """
+    return SimpleBuilder()
 
 
 def _is_url(source: str) -> bool:

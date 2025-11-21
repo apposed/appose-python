@@ -99,7 +99,7 @@ def create(service: Service, var: str, queue: str | None = None) -> Any:
     Raises:
         RuntimeError: If a proxied method call fails in the worker process.
     """
-    from ..syntax import Syntaxes
+    from .. import syntax
 
     class ProxyHandler:
         def __init__(self, service: Service, var: str, queue: str | None):
@@ -119,7 +119,7 @@ def create(service: Service, var: str, queue: str | None = None) -> Any:
 
                 # Use the service's ScriptSyntax to generate the method invocation script.
                 # This allows support for different languages with varying syntax.
-                Syntaxes.validate(self._service)
+                syntax.validate(self._service)
                 script = self._service.syntax().invoke_method(
                     self._var, name, arg_names
                 )

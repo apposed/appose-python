@@ -45,7 +45,12 @@ from typing import Callable, Protocol
 from urllib.request import urlopen
 
 from ..environment import Environment
-from ..scheme import Scheme, Schemes
+from ..scheme import Scheme
+from .. import scheme
+
+
+# Type alias for progress callback
+ProgressConsumer = Callable[[str, int, int], None]
 
 
 class BuildException(Exception):
@@ -67,17 +72,13 @@ class BuildException(Exception):
             message: Error message
             cause: The underlying exception that caused the build to fail
         """
-        self.builder = builder
-        if message is None and cause is not None:
+        if message is None:
             noun = "build" if builder is None else f"{builder.name()} build"
             verb = "interrupted" if isinstance(cause, KeyboardInterrupt) else "failed"
             message = f"{noun} {verb}"
         super().__init__(message)
+        self.builder = builder
         self.__cause__ = cause
-
-
-# Type alias for progress callback
-ProgressConsumer = Callable[[str, int, int], None]
 
 
 class Builder(Protocol):
@@ -555,9 +556,9 @@ class BaseBuilder:
     def _scheme(self) -> Scheme:
         """Get the scheme, detecting from content if needed."""
         if self.scheme:
-            return Schemes.from_name(self.scheme)
+            return scheme.from_name(self.scheme)
         if self.source_content:
-            return Schemes.from_content(self.source_content)
+            return scheme.from_content(self.source_content)
         raise ValueError("Cannot determine scheme: neither scheme nor content is set")
 
     def _create_env(
@@ -615,7 +616,7 @@ class SimpleBuilder(BaseBuilder):
 
     def __init__(self):
         super().__init__()
-        self.custom_bin_paths: list[str] = []
+        self._custom_bin_paths: list[str] = []
 
     def name(self) -> str:
         return "custom"
@@ -631,7 +632,7 @@ class SimpleBuilder(BaseBuilder):
         Returns:
             This builder instance
         """
-        self.custom_bin_paths.extend(paths)
+        self._custom_bin_paths.extend(paths)
         return self
 
     def append_system_path(self) -> SimpleBuilder:
@@ -642,7 +643,7 @@ class SimpleBuilder(BaseBuilder):
             This builder instance
         """
         system_path = os.environ.get("PATH", "").split(os.pathsep)
-        self.custom_bin_paths.extend(system_path)
+        self._custom_bin_paths.extend(system_path)
         return self
 
     def inherit_running_java(self) -> SimpleBuilder:
@@ -659,7 +660,7 @@ class SimpleBuilder(BaseBuilder):
             java_home_bin = Path(java_home) / "bin"
             if java_home_bin.is_dir():
                 # Prepend to beginning of list for highest priority
-                self.custom_bin_paths.insert(0, str(java_home_bin))
+                self._custom_bin_paths.insert(0, str(java_home_bin))
             self.env_vars_dict["JAVA_HOME"] = java_home
         return self
 
@@ -688,7 +689,7 @@ class SimpleBuilder(BaseBuilder):
             bin_paths.append(str(bin_dir.absolute()))
 
         # Add custom binary paths configured via builder methods
-        bin_paths.extend(self.custom_bin_paths)
+        bin_paths.extend(self._custom_bin_paths)
 
         return self._create_env(base_path, bin_paths, launch_args)
 
@@ -716,40 +717,6 @@ class SimpleBuilder(BaseBuilder):
     def _env_dir(self) -> Path:
         """Override to default to current directory."""
         return self.env_dir if self.env_dir else Path(".")
-
-
-class SimpleBuilderFactory:
-    """
-    Factory for creating SimpleBuilder instances.
-    SimpleBuilder can wrap any directory as a fallback.
-    """
-
-    def create_builder(self) -> Builder:
-        """Create a SimpleBuilder instance."""
-        return SimpleBuilder()
-
-    def name(self) -> str:
-        """Return the name of the builder."""
-        return "custom"
-
-    def supports_scheme(self, scheme: str) -> bool:
-        """SimpleBuilder doesn't support any specific schemes."""
-        return False
-
-    def priority(self) -> float:
-        """
-        Lowest priority - SimpleBuilder is a fallback.
-        Always tried last.
-        """
-        return 0.0
-
-    def can_wrap(self, env_dir: str | Path) -> bool:
-        """
-        SimpleBuilder can wrap any existing directory as a fallback.
-        This ensures that any directory can be used as an environment.
-        """
-        env_path = Path(env_dir) if isinstance(env_dir, str) else env_dir
-        return env_path.exists() and env_path.is_dir()
 
 
 class DynamicBuilder(BaseBuilder):
@@ -838,93 +805,7 @@ class DynamicBuilder(BaseBuilder):
         raise ValueError("Content and/or scheme must be provided for dynamic builder")
 
 
-# Builders utility class
-
-
-class Builders:
-    """
-    Utility class for discovering and managing environment builder factories.
-
-    Uses entry points for plugin discovery instead of Java's ServiceLoader.
-    """
-
-    _ALL_FACTORIES: list[BuilderFactory] | None = None
-
-    @staticmethod
-    def _discover_factories() -> list[BuilderFactory]:
-        """
-        Discover all BuilderFactory implementations via entry points.
-
-        Returns:
-            List of factories sorted by priority (highest first)
-        """
-        if Builders._ALL_FACTORIES is not None:
-            return Builders._ALL_FACTORIES
-
-        factories: list[BuilderFactory] = []
-
-        # Try modern importlib.metadata (Python 3.8+)
-        try:
-            from importlib.metadata import entry_points
-        except ImportError:
-            # Fall back to importlib_metadata for older Python
-            try:
-                from importlib_metadata import entry_points
-            except ImportError:
-                # If no entry point support, use hardcoded defaults
-                from .pixi import PixiBuilderFactory
-                from .mamba import MambaBuilderFactory
-                from .uv import UvBuilderFactory
-
-                Builders._ALL_FACTORIES = sorted(
-                    [
-                        PixiBuilderFactory(),
-                        MambaBuilderFactory(),
-                        UvBuilderFactory(),
-                        SimpleBuilderFactory(),
-                    ],
-                    key=lambda f: f.priority(),
-                    reverse=True,
-                )
-                return Builders._ALL_FACTORIES
-
-        # Load from entry points
-        eps = entry_points()
-        # Handle both old and new entry_points() API
-        if hasattr(eps, "select"):
-            # New API (Python 3.10+)
-            builder_eps = eps.select(group="appose.builders")
-        else:
-            # Old API (Python 3.8-3.9)
-            builder_eps = eps.get("appose.builders", [])
-
-        for ep in builder_eps:
-            try:
-                factory_class = ep.load()
-                factories.append(factory_class())
-            except Exception as e:
-                print(
-                    f"Warning: Failed to load builder factory {ep.name}: {e}",
-                    file=sys.stderr,
-                )
-
-        # If no entry points found, fall back to hardcoded defaults
-        if not factories:
-            from .pixi import PixiBuilderFactory
-            from .mamba import MambaBuilderFactory
-            from .uv import UvBuilderFactory
-
-            factories = [
-                PixiBuilderFactory(),
-                MambaBuilderFactory(),
-                UvBuilderFactory(),
-                SimpleBuilderFactory(),
-            ]
-
-        # Sort by priority (highest first)
-        factories.sort(key=lambda f: f.priority(), reverse=True)
-        Builders._ALL_FACTORIES = factories
-        return factories
+_BUILDERS: list[BuilderFactory] | None = None
 
 
 def find_factory_by_name(name: str) -> BuilderFactory | None:
@@ -937,7 +818,7 @@ def find_factory_by_name(name: str) -> BuilderFactory | None:
     Returns:
         The factory with matching name, or None if not found
     """
-    factories = Builders._discover_factories()
+    factories = _discover_factories()
     for factory in factories:
         if factory.name().lower() == name.lower():
             return factory
@@ -955,7 +836,7 @@ def find_factory_by_scheme(scheme: str) -> BuilderFactory | None:
     Returns:
         The first factory that supports the scheme, or None if none found
     """
-    factories = Builders._discover_factories()
+    factories = _discover_factories()
     for factory in factories:
         if factory.supports_scheme(scheme):
             return factory
@@ -973,7 +854,7 @@ def find_factory_for_wrapping(env_dir: str | Path) -> BuilderFactory | None:
     Returns:
         The first factory that can wrap the directory, or None if none found
     """
-    factories = Builders._discover_factories()
+    factories = _discover_factories()
     for factory in factories:
         if factory.can_wrap(env_dir):
             return factory
@@ -1005,3 +886,78 @@ def env_type(env_dir: str | Path) -> str | None:
     """
     factory = find_factory_for_wrapping(env_dir)
     return factory.name() if factory else None
+
+
+def _discover_factories() -> list[BuilderFactory]:
+    """
+    Discover all BuilderFactory implementations via entry points.
+
+    Returns:
+        List of factories sorted by priority (highest first)
+    """
+    global _BUILDERS
+    if _BUILDERS is not None:
+        return _BUILDERS
+
+    factories: list[BuilderFactory] = []
+
+    # Try modern importlib.metadata (Python 3.8+)
+    try:
+        from importlib.metadata import entry_points
+    except ImportError:
+        # Fall back to importlib_metadata for older Python
+        try:
+            from importlib_metadata import entry_points
+        except ImportError:
+            # If no entry point support, use hardcoded defaults
+            from .pixi import PixiBuilderFactory
+            from .mamba import MambaBuilderFactory
+            from .uv import UvBuilderFactory
+
+            _BUILDERS = sorted(
+                [
+                    PixiBuilderFactory(),
+                    MambaBuilderFactory(),
+                    UvBuilderFactory(),
+                ],
+                key=lambda f: f.priority(),
+                reverse=True,
+            )
+            return _BUILDERS
+
+    # Load from entry points
+    eps = entry_points()
+    # Handle both old and new entry_points() API
+    if hasattr(eps, "select"):
+        # New API (Python 3.10+)
+        builder_eps = eps.select(group="appose.builders")
+    else:
+        # Old API (Python 3.8-3.9)
+        builder_eps = eps.get("appose.builders", [])
+
+    for ep in builder_eps:
+        try:
+            factory_class = ep.load()
+            factories.append(factory_class())
+        except Exception as e:
+            print(
+                f"Warning: Failed to load builder factory {ep.name}: {e}",
+                file=sys.stderr,
+            )
+
+    # If no entry points found, fall back to hardcoded defaults
+    if not factories:
+        from .pixi import PixiBuilderFactory
+        from .mamba import MambaBuilderFactory
+        from .uv import UvBuilderFactory
+
+        factories = [
+            PixiBuilderFactory(),
+            MambaBuilderFactory(),
+            UvBuilderFactory(),
+        ]
+
+    # Sort by priority (highest first)
+    factories.sort(key=lambda f: f.priority(), reverse=True)
+    _BUILDERS = factories
+    return factories

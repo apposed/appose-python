@@ -286,64 +286,59 @@ class RequirementsTxtScheme:
         return bool(re.match(r"^[a-zA-Z0-9_-]+(==|>=|<=|~=|!=)?", trimmed, re.DOTALL))
 
 
-class Schemes:
-    """
-    Utility class for discovering and working with content Schemes.
-    """
+# All known scheme implementations, in priority order.
+# More specific schemes should come first to ensure correct detection.
+# For example, pyproject.toml must be checked before pixi.toml
+# since both are TOML files but pyproject.toml has more specific markers.
+_SCHEMES: list[Scheme] = sorted(
+    [
+        PixiTomlScheme(),
+        EnvironmentYmlScheme(),
+        PyProjectTomlScheme(),
+        RequirementsTxtScheme(),
+    ],
+    key=lambda s: s.priority(),
+    reverse=True,
+)
 
-    # All known scheme implementations, in priority order.
-    # More specific schemes should come first to ensure correct detection.
-    # For example, pyproject.toml must be checked before pixi.toml
-    # since both are TOML files but pyproject.toml has more specific markers.
-    _ALL: list[Scheme] = sorted(
-        [
-            PixiTomlScheme(),
-            EnvironmentYmlScheme(),
-            PyProjectTomlScheme(),
-            RequirementsTxtScheme(),
-        ],
-        key=lambda s: s.priority(),
-        reverse=True,
+
+def from_content(content: str) -> Scheme:
+    """
+    Detects and returns the appropriate scheme for the given configuration content.
+
+    Args:
+        content: Configuration file content
+
+    Returns:
+        The matching scheme
+
+    Raises:
+        ValueError: If no scheme can handle the content
+    """
+    for scheme in _SCHEMES:
+        if scheme.supports_content(content):
+            return scheme
+
+    raise ValueError(
+        "Cannot infer scheme from content. Please specify explicitly with .scheme()"
     )
 
-    @staticmethod
-    def from_content(content: str) -> Scheme:
-        """
-        Detects and returns the appropriate scheme for the given configuration content.
 
-        Args:
-            content: Configuration file content
+def from_name(name: str) -> Scheme:
+    """
+    Returns the scheme with the given name.
 
-        Returns:
-            The matching scheme
+    Args:
+        name: Scheme name (e.g., "pixi.toml", "environment.yml")
 
-        Raises:
-            ValueError: If no scheme can handle the content
-        """
-        for scheme in Schemes._ALL:
-            if scheme.supports_content(content):
-                return scheme
+    Returns:
+        The matching scheme
 
-        raise ValueError(
-            "Cannot infer scheme from content. Please specify explicitly with .scheme()"
-        )
+    Raises:
+        ValueError: If no scheme matches the name
+    """
+    for scheme in _SCHEMES:
+        if scheme.name() == name:
+            return scheme
 
-    @staticmethod
-    def from_name(name: str) -> Scheme:
-        """
-        Returns the scheme with the given name.
-
-        Args:
-            name: Scheme name (e.g., "pixi.toml", "environment.yml")
-
-        Returns:
-            The matching scheme
-
-        Raises:
-            ValueError: If no scheme matches the name
-        """
-        for scheme in Schemes._ALL:
-            if scheme.name() == name:
-                return scheme
-
-        raise ValueError(f"Unknown scheme: {name}")
+    raise ValueError(f"Unknown scheme: {name}")

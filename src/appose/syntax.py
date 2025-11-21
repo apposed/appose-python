@@ -191,43 +191,38 @@ class GroovySyntax:
         return f"{object_var_name}.{method_name}({', '.join(arg_var_names)})"
 
 
-class Syntaxes:
+# All known script syntax implementations.
+_SYNTAXES: list[ScriptSyntax] = [
+    PythonSyntax(),
+    GroovySyntax(),
+]
+
+
+def get(name: str) -> ScriptSyntax:
     """
-    Utility class for discovering and working with ScriptSyntaxes.
+    Detects and returns the script syntax with the given name.
+
+    Args:
+        name: Name of the script syntax
+
+    Returns:
+        The matching script syntax object, or None if no syntax with the given name
     """
+    for syntax in _SYNTAXES:
+        if syntax.name() == name:
+            return syntax
+    return None
 
-    # All known script syntax implementations.
-    _ALL: list[ScriptSyntax] = [
-        PythonSyntax(),
-        GroovySyntax(),
-    ]
 
-    @staticmethod
-    def get(name: str) -> ScriptSyntax:
-        """
-        Detects and returns the script syntax with the given name.
+def validate(service: Service) -> None:
+    """
+    Verifies that the given service has an assigned script syntax.
 
-        Args:
-            name: Name of the script syntax
+    Args:
+        service: The service to ensure valid script syntax assignment
 
-        Returns:
-            The matching script syntax object, or None if no syntax with the given name
-        """
-        for syntax in Syntaxes._ALL:
-            if syntax.name() == name:
-                return syntax
-        return None
-
-    @staticmethod
-    def validate(service: Service) -> None:
-        """
-        Verifies that the given service has an assigned script syntax.
-
-        Args:
-            service: The service to ensure valid script syntax assignment
-
-        Raises:
-            ValueError: If no script syntax is configured
-        """
-        if service.syntax() is None:
-            raise ValueError("No script syntax configured for this service")
+    Raises:
+        ValueError: If no script syntax is configured
+    """
+    if service.syntax() is None:
+        raise ValueError("No script syntax configured for this service")

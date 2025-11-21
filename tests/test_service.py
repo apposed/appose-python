@@ -31,6 +31,7 @@
 import appose
 from appose.service import TaskStatus
 from tests.test_base import execute_and_assert, maybe_debug
+from pathlib import Path
 
 collatz_groovy = """
 // Computes the stopping time of a given value
@@ -92,7 +93,7 @@ def test_python():
 
 
 def test_service_startup_failure():
-    env = appose.custom().base("no-java-to-be-found-here").build()
+    env = appose.custom().base(Path("target") / "no-java-to-be-found-here").build()
     try:
         with env.groovy():
             raise AssertionError("Groovy worker process started successfully!?")
