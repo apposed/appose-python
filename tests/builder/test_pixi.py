@@ -126,7 +126,7 @@ def test_pixi_pyproject():
 
 def test_content_api():
     """Tests building environment from content string using type-specific builder."""
-    pixi_toml = """[project]
+    pixi_toml = """[workspace]
 name = "content-test"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
@@ -177,7 +177,7 @@ dependencies:
 
 def test_content_pixi_toml():
     """Tests auto-detecting builder from pixi.toml content string."""
-    pixi_toml = """[project]
+    pixi_toml = """[workspace]
 name = "content-pixi-toml"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
