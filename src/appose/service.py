@@ -270,6 +270,8 @@ class Service:
         """
         Close the worker process's input stream, in order to shut it down.
         """
+        if self._process is None:
+            raise RuntimeError("Service has not been started")
         self._process.stdin.close()
 
     def __enter__(self) -> "Service":

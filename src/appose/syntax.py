@@ -37,15 +37,16 @@ like exporting variables, calling functions, and invoking methods on objects.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .service import Service
 
 
-class ScriptSyntax(Protocol):
+class ScriptSyntax(ABC):
     """
-    Strategy interface for generating language-specific script syntax.
+    Strategy base class for generating language-specific script syntax.
 
     Different scripting languages have different syntax for common operations
     like exporting variables, calling functions, and invoking methods on objects.
@@ -53,12 +54,14 @@ class ScriptSyntax(Protocol):
     supported language.
     """
 
+    @abstractmethod
     def name(self) -> str:
         """
         The name of this script syntax (e.g. "python", "groovy").
         """
         ...
 
+    @abstractmethod
     def get_var(self, name: str) -> str:
         """
         Generates a script expression to retrieve a variable's value.
@@ -74,6 +77,7 @@ class ScriptSyntax(Protocol):
         """
         ...
 
+    @abstractmethod
     def put_var(self, name: str, value_var_name: str) -> str:
         """
         Generates a script to set a variable and export it for future tasks.
@@ -91,6 +95,7 @@ class ScriptSyntax(Protocol):
         """
         ...
 
+    @abstractmethod
     def call(self, function: str, arg_var_names: list[str]) -> str:
         """
         Generates a script expression to call a function with arguments.
@@ -108,6 +113,7 @@ class ScriptSyntax(Protocol):
         """
         ...
 
+    @abstractmethod
     def invoke_method(
         self, object_var_name: str, method_name: str, arg_var_names: list[str]
     ) -> str:
@@ -128,7 +134,7 @@ class ScriptSyntax(Protocol):
         ...
 
 
-class PythonSyntax:
+class PythonSyntax(ScriptSyntax):
     """
     Python-specific script syntax implementation.
 
@@ -159,7 +165,7 @@ class PythonSyntax:
         return f"{object_var_name}.{method_name}({', '.join(arg_var_names)})"
 
 
-class GroovySyntax:
+class GroovySyntax(ScriptSyntax):
     """
     Groovy-specific script syntax implementation.
 

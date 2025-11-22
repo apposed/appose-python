@@ -40,8 +40,9 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable
 from urllib.request import urlopen
 
 from ..environment import Environment
@@ -81,9 +82,9 @@ class BuildException(Exception):
         self.__cause__: Exception | None = cause
 
 
-class Builder(Protocol):
+class Builder(ABC):
     """
-    Base protocol for all Appose environment builders.
+    Base class for all Appose environment builders.
 
     Builders are responsible for creating and configuring Appose environments.
 
@@ -91,6 +92,7 @@ class Builder(Protocol):
     builder type without requiring subclasses to override every method.
     """
 
+    @abstractmethod
     def name(self) -> str:
         """
         Returns the name of this builder (e.g., "pixi", "mamba", "uv", "custom").
@@ -100,6 +102,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def build(self) -> Environment:
         """
         Builds the environment. This is the terminator method for any fluid building chain.
@@ -129,8 +132,13 @@ class Builder(Protocol):
         Raises:
             BuildException: If the build fails
         """
-        ...
+        try:
+            self.delete()
+        except Exception as e:
+            raise BuildException(self, cause=e)
+        return self.build()
 
+    @abstractmethod
     def delete(self) -> None:
         """
         Deletes the builder's linked environment directory, if any.
@@ -140,6 +148,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def wrap(self, env_dir: str | Path) -> Environment:
         """
         Wraps an existing environment directory, detecting and using any
@@ -160,6 +169,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def env(self, key: str, value: str) -> Builder:
         """
         Sets an environment variable to be passed to worker processes.
@@ -173,6 +183,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def env_vars(self, vars: dict[str, str]) -> Builder:
         """
         Sets multiple environment variables to be passed to worker processes.
@@ -185,6 +196,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def set_name(self, env_name: str) -> Builder:
         """
         Sets the name for the environment.
@@ -198,6 +210,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def base(self, env_dir: str | Path) -> Builder:
         """
         Sets the base directory for the environment.
@@ -211,6 +224,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def channels(self, *channels: str) -> Builder:
         """
         Adds channels/repositories to search for packages.
@@ -241,8 +255,15 @@ class Builder(Protocol):
         Raises:
             BuildException: If the file cannot be read
         """
-        ...
+        try:
+            file_path = Path(path)
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return self.content(content)
+        except Exception as e:
+            raise BuildException(self, cause=e)
 
+    @abstractmethod
     def content(self, content: str) -> Builder:
         """
         Specifies configuration file content to build from.
@@ -270,8 +291,14 @@ class Builder(Protocol):
         Raises:
             BuildException: If the URL cannot be read
         """
-        ...
+        try:
+            with urlopen(url) as response:
+                content = response.read().decode("utf-8")
+            return self.content(content)
+        except Exception as e:
+            raise BuildException(self, cause=e)
 
+    @abstractmethod
     def scheme(self, scheme: str) -> Builder:
         """
         Explicitly specifies the scheme for the configuration.
@@ -285,6 +312,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def subscribe_progress(self, subscriber: ProgressConsumer) -> Builder:
         """
         Registers a callback to be invoked when progress happens during environment building.
@@ -297,6 +325,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def subscribe_output(self, subscriber: Callable[[str], None]) -> Builder:
         """
         Registers a callback to be invoked when output is generated during environment building.
@@ -309,6 +338,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def subscribe_error(self, subscriber: Callable[[str], None]) -> Builder:
         """
         Registers a callback to be invoked when errors occur during environment building.
@@ -321,6 +351,7 @@ class Builder(Protocol):
         """
         ...
 
+    @abstractmethod
     def flags(self, *flags: str) -> Builder:
         """
         Adds command-line flags to be passed to the underlying tool during build operations.
@@ -347,17 +378,20 @@ class Builder(Protocol):
         Returns:
             This builder instance, for fluent-style programming
         """
-        ...
+        return self.subscribe_output(
+            lambda msg: print(msg, file=sys.stdout, end="")
+        ).subscribe_error(lambda msg: print(msg, file=sys.stderr, end=""))
 
 
-class BuilderFactory(Protocol):
+class BuilderFactory(ABC):
     """
-    Factory protocol for creating builder instances.
+    Factory base class for creating builder instances.
 
     Implementations are discovered at runtime via entry points and managed by
     the Builders utility class.
     """
 
+    @abstractmethod
     def create_builder(self) -> Builder:
         """
         Creates a new builder instance with no configuration.
@@ -368,6 +402,7 @@ class BuilderFactory(Protocol):
         """
         ...
 
+    @abstractmethod
     def name(self) -> str:
         """
         Returns the name of this builder (e.g., "pixi", "mamba", "custom").
@@ -377,6 +412,7 @@ class BuilderFactory(Protocol):
         """
         ...
 
+    @abstractmethod
     def supports_scheme(self, scheme: str) -> bool:
         """
         Checks if this builder supports the given scheme.
@@ -389,6 +425,7 @@ class BuilderFactory(Protocol):
         """
         ...
 
+    @abstractmethod
     def priority(self) -> float:
         """
         Returns the priority of this builder for scheme resolution.
@@ -399,6 +436,7 @@ class BuilderFactory(Protocol):
         """
         ...
 
+    @abstractmethod
     def can_wrap(self, env_dir: str | Path) -> bool:
         """
         Checks if this builder can wrap the given existing environment directory.
@@ -412,7 +450,7 @@ class BuilderFactory(Protocol):
         ...
 
 
-class BaseBuilder:
+class BaseBuilder(Builder):
     """
     Base class for environment builders.
     Provides common implementation for the Builder protocol.
@@ -429,14 +467,6 @@ class BaseBuilder:
         self.env_dir: Path | None = None
         self.source_content: str | None = None
         self.scheme: str | None = None
-
-    def rebuild(self) -> Environment:
-        """Default implementation: delete then build."""
-        try:
-            self.delete()
-        except Exception as e:
-            raise BuildException(self, cause=e)
-        return self.build()
 
     def delete(self) -> None:
         """Default implementation: delete env_dir if it exists."""
@@ -479,29 +509,10 @@ class BaseBuilder:
         self.channels_list.extend(channels)
         return self
 
-    def file(self, path: str | Path) -> BaseBuilder:
-        """Load configuration from a file."""
-        try:
-            file_path = Path(path)
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return self.content(content)
-        except Exception as e:
-            raise BuildException(self, cause=e)
-
     def content(self, content: str) -> BaseBuilder:
         """Set configuration content."""
         self.source_content = content
         return self
-
-    def url(self, url: str) -> BaseBuilder:
-        """Load configuration from a URL."""
-        try:
-            with urlopen(url) as response:
-                content = response.read().decode("utf-8")
-            return self.content(content)
-        except Exception as e:
-            raise BuildException(self, cause=e)
 
     def scheme(self, scheme: str) -> BaseBuilder:
         """Set the explicit scheme."""
@@ -527,12 +538,6 @@ class BaseBuilder:
         """Add command-line flags."""
         self.flags_list.extend(flags)
         return self
-
-    def log_debug(self) -> BaseBuilder:
-        """Log output and errors to stderr."""
-        return self.subscribe_output(
-            lambda msg: print(msg, file=sys.stdout, end="")
-        ).subscribe_error(lambda msg: print(msg, file=sys.stderr, end=""))
 
     # Helper methods
 

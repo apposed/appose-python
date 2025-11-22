@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import BaseBuilder, BuildException, Builder
+from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
 
 
@@ -284,7 +284,7 @@ class UvBuilder(BaseBuilder):
         return self._create_env(base, bin_paths, launch_args)
 
 
-class UvBuilderFactory:
+class UvBuilderFactory(BuilderFactory):
     """
     Factory for creating UvBuilder instances.
     """

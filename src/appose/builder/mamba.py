@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import BaseBuilder, BuildException, Builder
+from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
 
 
@@ -213,7 +213,7 @@ class MambaBuilder(BaseBuilder):
         return self._create_env(base, bin_paths, launch_args)
 
 
-class MambaBuilderFactory:
+class MambaBuilderFactory(BuilderFactory):
     """
     Factory for creating MambaBuilder instances.
     """

@@ -38,10 +38,10 @@ requirements.txt).
 from __future__ import annotations
 
 import re
-from typing import Protocol
+from abc import ABC, abstractmethod
 
 
-class Scheme(Protocol):
+class Scheme(ABC):
     """
     Represents a configuration file scheme for environment builders.
 
@@ -49,6 +49,7 @@ class Scheme(Protocol):
     (e.g., pixi.toml, pyproject.toml, environment.yml, requirements.txt).
     """
 
+    @abstractmethod
     def name(self) -> str:
         """
         Gets the name of this scheme.
@@ -58,6 +59,7 @@ class Scheme(Protocol):
         """
         ...
 
+    @abstractmethod
     def priority(self) -> float:
         """
         Gets the priority of this scheme for detection ordering.
@@ -71,6 +73,7 @@ class Scheme(Protocol):
         """
         ...
 
+    @abstractmethod
     def env_name(self, content: str) -> str | None:
         """
         Extracts the environment name from configuration content.
@@ -85,6 +88,7 @@ class Scheme(Protocol):
         """
         ...
 
+    @abstractmethod
     def supports_content(self, content: str) -> bool:
         """
         Tests whether this scheme can handle the given configuration content.
@@ -100,7 +104,7 @@ class Scheme(Protocol):
         ...
 
 
-class PixiTomlScheme:
+class PixiTomlScheme(Scheme):
     """
     Scheme for pixi.toml configuration files.
 
@@ -147,7 +151,7 @@ class PixiTomlScheme:
         return "[dependencies]" in trimmed or "[pypi-dependencies]" in trimmed
 
 
-class EnvironmentYmlScheme:
+class EnvironmentYmlScheme(Scheme):
     """
     Scheme for environment.yml (conda/mamba) configuration files.
     """
@@ -190,7 +194,7 @@ class EnvironmentYmlScheme:
         )
 
 
-class PyProjectTomlScheme:
+class PyProjectTomlScheme(Scheme):
     """
     Scheme for pyproject.toml configuration files (PEP 621 format).
 
@@ -256,7 +260,7 @@ class PyProjectTomlScheme:
         )
 
 
-class RequirementsTxtScheme:
+class RequirementsTxtScheme(Scheme):
     """
     Scheme for requirements.txt (pip) configuration files.
 
