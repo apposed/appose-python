@@ -77,8 +77,8 @@ class BuildException(Exception):
             verb = "interrupted" if isinstance(cause, KeyboardInterrupt) else "failed"
             message = f"{noun} {verb}"
         super().__init__(message)
-        self.builder = builder
-        self.__cause__ = cause
+        self.builder: Builder | None = builder
+        self.__cause__: Exception | None = cause
 
 
 class Builder(Protocol):
@@ -584,13 +584,13 @@ class BaseBuilder:
                 bin_path_list: list[str],
                 launch_arg_list: list[str],
                 env_var_dict: dict[str, str],
-                parent_builder: BaseBuilder,
+                parent_builder: Builder,
             ):
                 super().__init__(base_path)
-                self._bin_paths = bin_path_list
-                self._launch_args = launch_arg_list
-                self._env_vars = env_var_dict
-                self._builder = parent_builder
+                self._bin_paths: list[str] = bin_path_list
+                self._launch_args: list[str] = launch_arg_list
+                self._env_vars: dict[str, str] = env_var_dict
+                self._builder: Builder = parent_builder
 
             def bin_paths(self) -> list[str]:
                 return self._bin_paths

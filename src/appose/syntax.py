@@ -198,7 +198,7 @@ _SYNTAXES: list[ScriptSyntax] = [
 ]
 
 
-def get(name: str) -> ScriptSyntax:
+def get(name: str) -> ScriptSyntax | None:
     """
     Detects and returns the script syntax with the given name.
 

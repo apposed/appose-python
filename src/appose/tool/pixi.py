@@ -70,16 +70,16 @@ class Pixi(Tool):
     """
 
     # Pixi version to download
-    PIXI_VERSION = "v0.58.0"
+    PIXI_VERSION: str = "v0.58.0"
 
     # Path where Appose installs Pixi by default (.pixi subdirectory thereof)
-    BASE_PATH = filepath.appose_envs_dir()
+    BASE_PATH: str = filepath.appose_envs_dir()
 
     # The filename to download for the current platform
-    PIXI_BINARY = _pixi_binary()
+    PIXI_BINARY: str | None = _pixi_binary()
 
     # URL from where Pixi is downloaded to be installed
-    PIXI_URL = (
+    DOWNLOAD_URL: str | None = (
         f"https://github.com/prefix-dev/pixi/releases/download/{PIXI_VERSION}/{PIXI_BINARY}"
         if PIXI_BINARY
         else None
@@ -102,7 +102,7 @@ class Pixi(Tool):
 
         command_path = str(Path(root) / pixi_relative_path)
 
-        super().__init__("pixi", self.PIXI_URL, command_path, root)
+        super().__init__("pixi", self.DOWNLOAD_URL, command_path, root)
 
     def _decompress(self, archive: Path) -> None:
         """

@@ -38,8 +38,8 @@ from pathlib import Path
 from appose.util import filepath, platform
 
 
-EXT = ".exe" if platform.is_windows() else ""
-SET_EXEC_BIT = not platform.is_windows()
+EXT: str = ".exe" if platform.is_windows() else ""
+SET_EXEC_BIT: bool = not platform.is_windows()
 
 
 def test_find_exe():

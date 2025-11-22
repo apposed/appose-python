@@ -49,6 +49,10 @@ class MambaBuilder(BaseBuilder):
     def __init__(self):
         super().__init__()
 
+        # Note: Already assigned in BaseBuilder, but stubgen wants these here, too.
+        self.source_content: str | None = None
+        self.scheme: str | None = None
+
     def name(self) -> str:
         return "mamba"
 

@@ -49,7 +49,7 @@ class SharedMemory(shared_memory.SharedMemory):
     `unlink_on_dispose` flag.
     """
 
-    def __init__(self, name: str = None, create: bool = False, rsize: int = 0):
+    def __init__(self, name: str | None = None, create: bool = False, rsize: int = 0):
         """
         Create a new shared memory block, or attach to an existing one.
 
@@ -146,7 +146,7 @@ class NDArray:
     a particular shape, and flattened into SharedMemory.
     """
 
-    def __init__(self, dtype: str, shape: list[int], shm: SharedMemory = None):
+    def __init__(self, dtype: str, shape: list[int], shm: SharedMemory | None = None):
         """
         Create an NDArray.
         :param dtype: The type of the data elements; e.g. int8, uint8, float32, float64.

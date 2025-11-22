@@ -55,7 +55,7 @@ class TaskException(Exception):
 
     def __init__(self, message: str, task: "Task") -> None:
         super().__init__(message)
-        self.task = task
+        self.task: Task = task
 
     @property
     def status(self) -> "TaskStatus":

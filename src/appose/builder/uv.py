@@ -51,6 +51,10 @@ class UvBuilder(BaseBuilder):
         self.python_version: str | None = None
         self.packages: list[str] = []
 
+        # Note: Already assigned in BaseBuilder, but stubgen wants these here, too.
+        self.source_content: str | None = None
+        self.scheme: str | None = None
+
     def name(self) -> str:
         return "uv"
 

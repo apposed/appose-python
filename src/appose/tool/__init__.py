@@ -58,10 +58,10 @@ class Tool(ABC):
             command: Path to the tool's executable command.
             rootdir: Root directory where the tool is installed.
         """
-        self.name = name
-        self.url = url
-        self.command = command
-        self.rootdir = rootdir
+        self.name: str = name
+        self.url: str = url
+        self.command: str = command
+        self.rootdir: str = rootdir
 
         # Consumer callbacks
         self._output_consumer: Callable[[str], None] | None = None

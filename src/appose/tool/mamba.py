@@ -99,15 +99,15 @@ class Mamba(Tool):
     """
 
     # Path where Appose installs Micromamba by default
-    BASE_PATH = str(Path(filepath.appose_envs_dir()) / ".mamba")
+    BASE_PATH: str = str(Path(filepath.appose_envs_dir()) / ".mamba")
 
     # The platform string for micromamba download
-    MICROMAMBA_PLATFORM = _micromamba_platform()
+    PLATFORM: str | None = _micromamba_platform()
 
     # URL from where Micromamba is downloaded to be installed
-    MICROMAMBA_URL = (
-        f"https://micro.mamba.pm/api/micromamba/{MICROMAMBA_PLATFORM}/latest"
-        if MICROMAMBA_PLATFORM
+    DOWNLOAD_URL: str | None = (
+        f"https://micro.mamba.pm/api/micromamba/{PLATFORM}/latest"
+        if PLATFORM
         else None
     )
 
@@ -128,7 +128,7 @@ class Mamba(Tool):
 
         command_path = str(Path(root) / mamba_relative_path)
 
-        super().__init__("micromamba", self.MICROMAMBA_URL, command_path, root)
+        super().__init__("micromamba", self.DOWNLOAD_URL, command_path, root)
 
     def _decompress(self, archive: Path) -> None:
         """

@@ -50,6 +50,10 @@ class PixiBuilder(BaseBuilder):
         self.conda_packages: list[str] = []
         self.pypi_packages: list[str] = []
 
+        # Note: Already assigned in BaseBuilder, but stubgen wants these here, too.
+        self.source_content: str | None = None
+        self.scheme: str | None = None
+
     def name(self) -> str:
         return "pixi"
 

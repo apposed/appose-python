@@ -64,15 +64,15 @@ class TypesTest(unittest.TestCase):
     )
     # fmt: on
 
-    STRING = (
+    STRING: str = (
         "-=[]\\;',./_+{}|:\"<>?"
         "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz"
         "~!@#$%^&*()"
     )
 
-    NUMBERS = [1, 1, 2, 3, 5, 8]
+    NUMBERS: list[int] = [1, 1, 2, 3, 5, 8]
 
-    WORDS = ["quick", "brown", "fox"]
+    WORDS: list[str] = ["quick", "brown", "fox"]
 
     def test_encode(self):
         data = {

@@ -80,13 +80,13 @@ class Uv(Tool):
     UV_VERSION = "0.9.5"
 
     # Path where Appose installs uv by default (.uv subdirectory thereof)
-    BASE_PATH = filepath.appose_envs_dir()
+    BASE_PATH: str = filepath.appose_envs_dir()
 
     # The filename to download for the current platform
-    UV_BINARY = _uv_binary()
+    UV_BINARY: str | None = _uv_binary()
 
     # URL from where uv is downloaded to be installed
-    UV_URL = (
+    DOWNLOAD_URL: str | None = (
         f"https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/{UV_BINARY}"
         if UV_BINARY
         else None
@@ -109,7 +109,7 @@ class Uv(Tool):
 
         command_path = str(Path(root) / uv_relative_path)
 
-        super().__init__("uv", self.UV_URL, command_path, root)
+        super().__init__("uv", self.DOWNLOAD_URL, command_path, root)
 
     def _decompress(self, archive: Path) -> None:
         """
