@@ -61,7 +61,6 @@ Conda-based environment manager, implemented by delegating to micromamba.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 from . import Tool
@@ -141,34 +140,22 @@ class Mamba(Tool):
         Raises:
             IOError: If decompression/installation fails.
         """
-        # Create temporary tar file
-        temp_tar_fd, temp_tar_path = tempfile.mkstemp(suffix=".tar")
-        temp_tar = Path(temp_tar_path)
+        # Create mamba base directory
+        mamba_base_dir = Path(self.rootdir)
+        if not mamba_base_dir.is_dir():
+            mamba_base_dir.mkdir(parents=True, exist_ok=True)
 
-        try:
-            # Decompress bzip2 to tar
-            download.un_bzip2(archive, temp_tar)
+        # Extract archive
+        download.unpack(archive, mamba_base_dir)
 
-            # Create mamba base directory
-            mamba_base_dir = Path(self.rootdir)
-            if not mamba_base_dir.is_dir():
-                mamba_base_dir.mkdir(parents=True, exist_ok=True)
+        # Verify micromamba binary exists
+        mm_file = Path(self.command)
+        if not mm_file.exists():
+            raise IOError(f"Expected micromamba binary is missing: {self.command}")
 
-            # Extract tar
-            download.un_tar(temp_tar, mamba_base_dir)
-
-            # Verify micromamba binary exists
-            mm_file = Path(self.command)
-            if not mm_file.exists():
-                raise IOError(f"Expected micromamba binary is missing: {self.command}")
-
-            # Set executable permission if needed
-            if not platform.is_executable(mm_file):
-                mm_file.chmod(mm_file.stat().st_mode | 0o111)
-
-        finally:
-            # Clean up temporary file
-            temp_tar.unlink(missing_ok=True)
+        # Set executable permission if needed
+        if not platform.is_executable(mm_file):
+            mm_file.chmod(mm_file.stat().st_mode | 0o111)
 
     def create(self, env_dir: Path) -> None:
         """
