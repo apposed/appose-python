@@ -37,6 +37,7 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
+from ..tool.mamba import Mamba
 
 
 class MambaBuilder(BaseBuilder):
@@ -78,8 +79,6 @@ class MambaBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
-        from ..tool.mamba import Mamba
-
         env_dir = self._env_dir()
 
         # Check for incompatible existing environments
@@ -192,7 +191,7 @@ class MambaBuilder(BaseBuilder):
         self.base(env_path)
         return self.build()
 
-    def _create_environment(self, env_dir: Path, mamba) -> Environment:
+    def _create_environment(self, env_dir: Path, mamba: Mamba) -> Environment:
         """
         Creates an Environment for the given Mamba/conda directory.
 

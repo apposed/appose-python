@@ -231,8 +231,7 @@ from .builder.uv import UvBuilder
 from .environment import Environment
 from .service import TaskException  # noqa: F401
 from .shm import NDArray, SharedMemory  # noqa: F401
-
-__version__ = "0.7.3.dev0"
+from ._version import __version__  # noqa: F401
 
 
 def pixi(source: str | Path | None = None) -> PixiBuilder:

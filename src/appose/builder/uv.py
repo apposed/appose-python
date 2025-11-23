@@ -37,6 +37,8 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
+from ..tool.uv import Uv
+from ..util.platform import is_windows
 
 
 class UvBuilder(BaseBuilder):
@@ -108,8 +110,6 @@ class UvBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
-        from ..tool.uv import Uv
-
         env_dir = self._env_dir()
 
         # Check for incompatible existing environments
@@ -262,8 +262,6 @@ class UvBuilder(BaseBuilder):
         Returns:
             Environment configured for this uv/venv installation
         """
-        from ..util.platform import is_windows
-
         # Convert to absolute path for consistency
         env_dir_abs = env_dir.absolute()
         base = str(env_dir_abs)

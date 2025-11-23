@@ -106,9 +106,7 @@ class Mamba(Tool):
 
     # URL from where Micromamba is downloaded to be installed
     DOWNLOAD_URL: str | None = (
-        f"https://micro.mamba.pm/api/micromamba/{PLATFORM}/latest"
-        if PLATFORM
-        else None
+        f"https://micro.mamba.pm/api/micromamba/{PLATFORM}/latest" if PLATFORM else None
     )
 
     def __init__(self, rootdir: str | None = None):

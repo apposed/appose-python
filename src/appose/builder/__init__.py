@@ -45,9 +45,10 @@ from pathlib import Path
 from typing import Callable
 from urllib.request import urlopen
 
+from .. import scheme
 from ..environment import Environment
 from ..scheme import Scheme
-from .. import scheme
+from ..util.filepath import appose_envs_dir
 
 
 # Type alias for progress callback
@@ -554,8 +555,6 @@ class BaseBuilder(Builder):
         if self.env_dir:
             return self.env_dir
         # Fall back to Appose-managed environments directory
-        from ..util.filepath import appose_envs_dir
-
         return Path(appose_envs_dir()) / self._env_name()
 
     def _scheme(self) -> Scheme:

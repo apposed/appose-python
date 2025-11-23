@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError
 
-from .. import __version__
+from .._version import __version__
+from .filepath import file_type
 
 
 def download(
@@ -41,7 +42,6 @@ def download(
     Raises:
         IOError: If download fails.
     """
-    from .filepath import file_type
 
     # Resolve redirects and get final URL
     final_url = redirected_url(url_path)

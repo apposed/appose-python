@@ -57,6 +57,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .. import syntax
+
 if TYPE_CHECKING:
     from ..service import Service
 
@@ -99,7 +101,6 @@ def create(service: Service, var: str, queue: str | None = None) -> Any:
     Raises:
         RuntimeError: If a proxied method call fails in the worker process.
     """
-    from .. import syntax
 
     class ProxyHandler:
         def __init__(self, service: Service, var: str, queue: str | None):

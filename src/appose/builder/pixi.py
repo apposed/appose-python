@@ -36,6 +36,7 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
+from ..tool.pixi import Pixi
 
 
 class PixiBuilder(BaseBuilder):
@@ -105,8 +106,6 @@ class PixiBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
-        from ..tool.pixi import Pixi
-
         env_dir = self._env_dir()
 
         # Check for incompatible existing environments
@@ -285,7 +284,7 @@ class PixiBuilder(BaseBuilder):
         self.base(env_path)
         return self.build()
 
-    def _create_environment(self, env_dir: Path, pixi) -> Environment:
+    def _create_environment(self, env_dir: Path, pixi: Pixi) -> Environment:
         """
         Creates an Environment for the given Pixi directory.
 
