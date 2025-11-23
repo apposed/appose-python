@@ -46,7 +46,7 @@ def test_custom():
     """
     env = (
         SimpleBuilder()
-        .env("CUSTOM_VAR", "test_value")  # Base Builder method
+        .env(CUSTOM_VAR="test_value")  # Base Builder method
         .inherit_running_java()  # SimpleBuilder method
         .append_system_path()  # SimpleBuilder method
         .build()

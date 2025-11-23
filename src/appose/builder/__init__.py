@@ -171,26 +171,12 @@ class Builder(ABC):
         ...
 
     @abstractmethod
-    def env(self, key: str, value: str) -> Builder:
+    def env(self, **vars: dict[str, str]) -> Builder:
         """
-        Sets an environment variable to be passed to worker processes.
+        Sets environment variables to be passed to worker processes.
 
         Args:
-            key: The environment variable name
-            value: The environment variable value
-
-        Returns:
-            This builder instance, for fluent-style programming
-        """
-        ...
-
-    @abstractmethod
-    def env_vars(self, vars: dict[str, str]) -> Builder:
-        """
-        Sets multiple environment variables to be passed to worker processes.
-
-        Args:
-            vars: Map of environment variable names to values
+            vars: Dictionary of environment variable names to values
 
         Returns:
             This builder instance, for fluent-style programming
@@ -485,13 +471,8 @@ class BaseBuilder(Builder):
         self.base(env_path)
         return self.build()
 
-    def env(self, key: str, value: str) -> BaseBuilder:
-        """Set a single environment variable."""
-        self.env_vars_dict[key] = value
-        return self
-
-    def env_vars(self, vars: dict[str, str]) -> BaseBuilder:
-        """Set multiple environment variables."""
+    def env(self, **vars: dict[str, str]) -> BaseBuilder:
+        """Set environment variables."""
         self.env_vars_dict.update(vars)
         return self
 
@@ -763,7 +744,7 @@ class DynamicBuilder(BaseBuilder):
 
     def _copy_config_to_delegate(self, delegate: Builder) -> None:
         """Copy configuration from dynamic builder to delegate."""
-        delegate.env_vars(self.env_vars_dict)
+        delegate.env(**self.env_vars_dict)
         if self.env_name:
             delegate.set_name(self.env_name)
         if self.env_dir:

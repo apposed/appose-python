@@ -219,7 +219,6 @@ class Environment:
         :return: The newly created service.
         :see: groovy() To create a service for Groovy script execution.
         :see: python() To create a service for Python script execution.
-        :raises IOError: If something goes wrong starting the worker process.
         """
         if not exes:
             raise ValueError("No executable given")
