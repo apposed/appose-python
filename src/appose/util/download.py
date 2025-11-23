@@ -43,14 +43,39 @@ def download(
     """
     from .filepath import file_type
 
+    # Resolve redirects and get final URL
+    final_url = redirected_url(url_path)
+
+    # Try to get file extension from final URL (after redirects)
+    file_ext = file_type(final_url)
+    if not file_ext:
+        # Try to extract filename from query parameters (e.g., ?filename=file.tar.bz2)
+        parsed = urllib.parse.urlparse(final_url)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        # Check for filename in query parameters
+        if "response-content-disposition" in params:
+            # Parse Content-Disposition header value
+            content_disp = params["response-content-disposition"][0]
+            # Extract filename from 'filename="..."' or filename*=UTF-8''...
+            import re
+
+            match = re.search(
+                r'filename[*]?=(?:UTF-8\'\')?["\']?([^"\';&]+)', content_disp
+            )
+            if match:
+                filename = urllib.parse.unquote(match.group(1))
+                file_ext = file_type(filename)
+
+        # Fallback to original URL if still no extension
+        if not file_ext:
+            file_ext = file_type(url_path)
+
     # Create temporary file with appropriate extension
-    file_ext = file_type(url_path)
     fd, temp_path = tempfile.mkstemp(prefix=f"{name}-", suffix=file_ext)
     temp_file = Path(temp_path)
 
     try:
-        # Resolve redirects and get final URL
-        final_url = redirected_url(url_path)
         file_size = get_file_size(final_url)
 
         # Download file with progress tracking
