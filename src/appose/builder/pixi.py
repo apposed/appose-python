@@ -81,18 +81,6 @@ class PixiBuilder(BaseBuilder):
         self._pypi_packages.extend(packages)
         return self
 
-    def channels(self, *channels: str) -> PixiBuilder:
-        """
-        Adds conda channels to search for packages.
-
-        Args:
-            channels: Channel names (e.g., "conda-forge", "bioconda")
-
-        Returns:
-            This builder instance
-        """
-        return super().channels(*channels)
-
     def build(self) -> Environment:
         """
         Builds the Pixi environment.
@@ -153,7 +141,7 @@ class PixiBuilder(BaseBuilder):
                 and not self._pypi_packages
             ):
                 # Environment already exists, just use it
-                return self._create_environment(env_dir, pixi)
+                return self._create_environment(pixi, env_dir)
 
             # Handle source-based build (file or content)
             if self._content is not None:
@@ -197,7 +185,7 @@ class PixiBuilder(BaseBuilder):
                 # Programmatic package building
                 if is_pixi_dir:
                     # Already initialized, just use it
-                    return self._create_environment(env_dir, pixi)
+                    return self._create_environment(pixi, env_dir)
 
                 if not env_dir.exists():
                     env_dir.mkdir(parents=True, exist_ok=True)
@@ -239,7 +227,7 @@ class PixiBuilder(BaseBuilder):
                             'Add .conda("appose") or .pypi("appose") to your builder.',
                         )
 
-            return self._create_environment(env_dir, pixi)
+            return self._create_environment(pixi, env_dir)
 
         except (IOError, KeyboardInterrupt) as e:
             raise BuildException(self, cause=e)
@@ -281,7 +269,7 @@ class PixiBuilder(BaseBuilder):
         self.base(env_path)
         return self.build()
 
-    def _create_environment(self, env_dir: Path, pixi: Pixi) -> Environment:
+    def _create_environment(self, pixi: Pixi, env_dir: Path) -> Environment:
         """
         Creates an Environment for the given Pixi directory.
 

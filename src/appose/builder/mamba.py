@@ -51,19 +51,6 @@ class MambaBuilder(BaseBuilder):
     def env_type(self) -> str:
         return "mamba"
 
-    def channels(self, *channels: str) -> MambaBuilder:
-        """
-        Adds conda channels to search for packages.
-
-        Args:
-            channels: Channel names (e.g., "conda-forge", "bioconda")
-
-        Returns:
-            This builder instance
-        """
-        super().channels(*channels)
-        return self
-
     def build(self) -> Environment:
         """
         Builds the Mamba environment.
@@ -95,7 +82,7 @@ class MambaBuilder(BaseBuilder):
         is_conda_dir = (env_dir / "conda-meta").is_dir()
         if is_conda_dir:
             # Environment already exists, just wrap it
-            return self._create_environment(env_dir, mamba)
+            return self._create_environment(mamba, env_dir)
 
         # Building a new environment - config content is required
         if self._content is None:
@@ -153,7 +140,7 @@ class MambaBuilder(BaseBuilder):
             # Step 3: Update environment from yml
             mamba.update(env_dir, env_yaml)
 
-            return self._create_environment(env_dir, mamba)
+            return self._create_environment(mamba, env_dir)
 
         except (IOError, KeyboardInterrupt) as e:
             raise BuildException(self, cause=e)
@@ -186,7 +173,7 @@ class MambaBuilder(BaseBuilder):
         self.base(env_path)
         return self.build()
 
-    def _create_environment(self, env_dir: Path, mamba: Mamba) -> Environment:
+    def _create_environment(self, mamba: Mamba, env_dir: Path) -> Environment:
         """
         Creates an Environment for the given Mamba/conda directory.
 

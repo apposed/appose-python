@@ -61,9 +61,9 @@ def test_task_exception_on_failure():
 
         # Verify we can access the task and its details through the exception
         assert e.task is task
-        assert e.status == TaskStatus.FAILED
-        assert e.task_error is not None
-        assert "NameError" in e.task_error or "nameerror" in e.task_error.lower()
+        assert e.task.status == TaskStatus.FAILED
+        assert e.task.error is not None
+        assert "NameError" in e.task.error or "nameerror" in e.task.error.lower()
 
 
 def test_no_exception_on_success():

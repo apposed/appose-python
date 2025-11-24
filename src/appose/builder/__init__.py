@@ -82,7 +82,7 @@ class BuildException(Exception):
             verb = "interrupted" if isinstance(cause, KeyboardInterrupt) else "failed"
             message = f"{noun} {verb}"
         super().__init__(message)
-        self._builder: Builder | None = builder
+        self.builder: Builder | None = builder
         self.__cause__: Exception | None = cause
 
 
@@ -253,20 +253,6 @@ class Builder(ABC):
         except Exception as e:
             raise BuildException(self, cause=e)
 
-    @abstractmethod
-    def content(self, content: str) -> Builder:
-        """
-        Specifies configuration file content to build from.
-        The scheme will be auto-detected from content syntax.
-
-        Args:
-            content: Configuration file content
-
-        Returns:
-            This builder instance, for fluent-style programming
-        """
-        ...
-
     def url(self, url: str) -> Builder:
         """
         Specifies a URL to fetch configuration content from.
@@ -287,6 +273,20 @@ class Builder(ABC):
             return self.content(content)
         except Exception as e:
             raise BuildException(self, cause=e)
+
+    @abstractmethod
+    def content(self, content: str) -> Builder:
+        """
+        Specifies configuration file content to build from.
+        The scheme will be auto-detected from content syntax.
+
+        Args:
+            content: Configuration file content
+
+        Returns:
+            This builder instance, for fluent-style programming
+        """
+        ...
 
     @abstractmethod
     def scheme(self, scheme: str) -> Builder:
@@ -605,9 +605,6 @@ class SimpleBuilder(BaseBuilder):
         super().__init__()
         self._custom_bin_paths: list[str] = []
 
-    def env_type(self) -> str:
-        return "custom"
-
     def bin_paths(self, *paths: str) -> SimpleBuilder:
         """
         Appends additional binary paths to search for executables.
@@ -650,6 +647,9 @@ class SimpleBuilder(BaseBuilder):
                 self._custom_bin_paths.insert(0, str(java_home_bin))
             self._env_vars["JAVA_HOME"] = java_home
         return self
+
+    def env_type(self) -> str:
+        return "custom"
 
     def build(self) -> Environment:
         """Build the simple environment."""

@@ -54,9 +54,6 @@ class UvBuilder(BaseBuilder):
         self._python_version: str | None = None
         self._packages: list[str] = []
 
-    def env_type(self) -> str:
-        return "uv"
-
     def python(self, version: str) -> UvBuilder:
         """
         Specifies the Python version to use for the virtual environment.
@@ -83,19 +80,8 @@ class UvBuilder(BaseBuilder):
         self._packages.extend(packages)
         return self
 
-    def channels(self, *indexes: str) -> UvBuilder:
-        """
-        Adds PyPI index URLs for package discovery.
-
-        These are alternative or additional package indexes beyond the default pypi.org.
-
-        Args:
-            indexes: Index URLs (e.g., custom PyPI mirrors or private package repositories)
-
-        Returns:
-            This builder instance
-        """
-        return super().channels(*indexes)
+    def env_type(self) -> str:
+        return "uv"
 
     def build(self) -> Environment:
         """

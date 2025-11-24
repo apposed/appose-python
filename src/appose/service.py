@@ -57,16 +57,6 @@ class TaskException(Exception):
         super().__init__(message)
         self.task: Task = task
 
-    @property
-    def status(self) -> "TaskStatus":
-        """Returns the status of the failed task."""
-        return self.task.status
-
-    @property
-    def task_error(self) -> str | None:
-        """Returns the error message from the task, if available."""
-        return self.task.error
-
 
 class Service:
     """
