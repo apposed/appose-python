@@ -64,7 +64,7 @@ class ScriptSyntax(ABC):
     @abstractmethod
     def get_var(self, name: str) -> str:
         """
-        Generates a script expression to retrieve a variable's value.
+        Generate a script expression to retrieve a variable's value.
 
         The variable must have been previously exported using task.export()
         to be accessible across tasks.
@@ -80,7 +80,7 @@ class ScriptSyntax(ABC):
     @abstractmethod
     def put_var(self, name: str, value_var_name: str) -> str:
         """
-        Generates a script to set a variable and export it for future tasks.
+        Generate a script to set a variable and export it for future tasks.
 
         The value is provided via a task input variable (typically named "_value").
         The generated script should assign the value to the named variable and
@@ -98,7 +98,7 @@ class ScriptSyntax(ABC):
     @abstractmethod
     def call(self, function: str, arg_var_names: list[str]) -> str:
         """
-        Generates a script expression to call a function with arguments.
+        Generate a script expression to call a function with arguments.
 
         The function must be accessible in the worker's global scope (either
         built-in or previously defined/imported). Arguments are provided via
@@ -118,7 +118,7 @@ class ScriptSyntax(ABC):
         self, object_var_name: str, method_name: str, arg_var_names: list[str]
     ) -> str:
         """
-        Generates a script expression to invoke a method on an object.
+        Generate a script expression to invoke a method on an object.
 
         The object must have been previously exported using task.export().
         This is used by the proxy mechanism to forward method calls to remote objects.
@@ -138,7 +138,7 @@ class PythonSyntax(ScriptSyntax):
     """
     Python-specific script syntax implementation.
 
-    Generates Python code for common operations like variable export,
+    Generate Python code for common operations like variable export,
     function calls, and method invocation. This is automatically used
     when creating Python services via Environment.python().
     """
@@ -169,7 +169,7 @@ class GroovySyntax(ScriptSyntax):
     """
     Groovy-specific script syntax implementation.
 
-    Generates Groovy code for common operations like variable export,
+    Generate Groovy code for common operations like variable export,
     function calls, and method invocation. This is automatically used
     when creating Groovy services via Environment.groovy().
     """
@@ -206,7 +206,7 @@ _SYNTAXES: list[ScriptSyntax] = [
 
 def get(name: str) -> ScriptSyntax | None:
     """
-    Detects and returns the script syntax with the given name.
+    Detect and returns the script syntax with the given name.
 
     Args:
         name: Name of the script syntax
@@ -222,7 +222,7 @@ def get(name: str) -> ScriptSyntax | None:
 
 def validate(service: Service) -> None:
     """
-    Verifies that the given service has an assigned script syntax.
+    Verify that the given service has an assigned script syntax.
 
     Args:
         service: The service to ensure valid script syntax assignment

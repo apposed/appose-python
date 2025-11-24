@@ -217,7 +217,7 @@ class Builder(ABC):
     @abstractmethod
     def channels(self, *channels: str) -> Builder:
         """
-        Adds channels/repositories to search for packages.
+        Add channels/repositories to search for packages.
 
         The interpretation of channels is builder-specific:
         - Pixi/Mamba: conda channels (e.g., "conda-forge", "bioconda")
@@ -233,7 +233,8 @@ class Builder(ABC):
 
     def file(self, path: str | Path) -> Builder:
         """
-        Specifies a configuration file to build from.
+        Specify a configuration file to build from.
+
         Reads the file content immediately and delegates to content().
 
         Args:
@@ -255,7 +256,8 @@ class Builder(ABC):
 
     def url(self, url: str) -> Builder:
         """
-        Specifies a URL to fetch configuration content from.
+        Specify a URL to fetch configuration content from.
+
         Reads the URL content immediately and delegates to content().
 
         Args:
@@ -277,7 +279,8 @@ class Builder(ABC):
     @abstractmethod
     def content(self, content: str) -> Builder:
         """
-        Specifies configuration file content to build from.
+        Specify configuration file content to build from.
+
         The scheme will be auto-detected from content syntax.
 
         Args:
@@ -291,7 +294,8 @@ class Builder(ABC):
     @abstractmethod
     def scheme(self, scheme: str) -> Builder:
         """
-        Explicitly specifies the scheme for the configuration.
+        Explicitly specify the scheme for the configuration.
+
         This overrides auto-detection.
 
         Args:
@@ -305,7 +309,7 @@ class Builder(ABC):
     @abstractmethod
     def subscribe_progress(self, subscriber: ProgressConsumer) -> Builder:
         """
-        Registers a callback to be invoked when progress happens during environment building.
+        Register a callback to be invoked when progress happens during environment building.
 
         Args:
             subscriber: Function to call with (title, current, maximum) when progress happens
@@ -318,7 +322,7 @@ class Builder(ABC):
     @abstractmethod
     def subscribe_output(self, subscriber: Callable[[str], None]) -> Builder:
         """
-        Registers a callback to be invoked when output is generated during environment building.
+        Register a callback to be invoked when output is generated during environment building.
 
         Args:
             subscriber: Function to call with output strings
@@ -331,7 +335,7 @@ class Builder(ABC):
     @abstractmethod
     def subscribe_error(self, subscriber: Callable[[str], None]) -> Builder:
         """
-        Registers a callback to be invoked when errors occur during environment building.
+        Register a callback to be invoked when errors occur during environment building.
 
         Args:
             subscriber: Function to call with error strings
@@ -344,7 +348,7 @@ class Builder(ABC):
     @abstractmethod
     def flags(self, *flags: str) -> Builder:
         """
-        Adds command-line flags to be passed to the underlying tool during build operations.
+        Add command-line flags to be passed to the underlying tool during build operations.
 
         These flags are passed directly to the tool's command-line invocation.
         The interpretation of flags is tool-specific:
@@ -418,7 +422,8 @@ class BuilderFactory(ABC):
     @abstractmethod
     def priority(self) -> float:
         """
-        Returns the priority of this builder for scheme resolution.
+        Return the priority of this builder for scheme resolution.
+
         Higher priority builders are preferred when multiple builders support the same scheme.
 
         Returns:
@@ -429,7 +434,7 @@ class BuilderFactory(ABC):
     @abstractmethod
     def can_wrap(self, env_dir: str | Path) -> bool:
         """
-        Checks if this builder can wrap the given existing environment directory.
+        Check if this builder can wrap the given existing environment directory.
 
         Args:
             env_dir: The directory to check
@@ -612,7 +617,8 @@ class SimpleBuilder(BaseBuilder):
 
     def bin_paths(self, *paths: str) -> SimpleBuilder:
         """
-        Appends additional binary paths to search for executables.
+        Append additional binary paths to search for executables.
+
         Paths are searched in the order they are added.
 
         Args:
@@ -626,7 +632,7 @@ class SimpleBuilder(BaseBuilder):
 
     def append_system_path(self) -> SimpleBuilder:
         """
-        Appends the current process's system PATH directories to the environment's binary paths.
+        Append the current process's system PATH directories to the environment's binary paths.
 
         Returns:
             This builder instance
@@ -637,7 +643,8 @@ class SimpleBuilder(BaseBuilder):
 
     def inherit_running_java(self) -> SimpleBuilder:
         """
-        Configures the environment to use the same Java installation as the parent process.
+        Configure the environment to use the same Java installation as the parent process.
+
         This prepends ${JAVA_HOME}/bin to the binary paths and sets the JAVA_HOME
         environment variable.
 
@@ -852,7 +859,7 @@ def find_factory_for_wrapping(env_dir: str | Path) -> BuilderFactory | None:
 
 def can_wrap(env_dir: str | Path) -> bool:
     """
-    Checks if the given directory can be wrapped as a known environment type.
+    Check if the given directory can be wrapped as a known environment type.
 
     Args:
         env_dir: The directory to check
@@ -865,7 +872,7 @@ def can_wrap(env_dir: str | Path) -> bool:
 
 def env_type(env_dir: str | Path) -> str | None:
     """
-    Returns the environment type name for the given directory.
+    Return the environment type name for the given directory.
 
     Args:
         env_dir: The directory to check

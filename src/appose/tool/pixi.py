@@ -106,7 +106,7 @@ class Pixi(Tool):
 
     def _decompress(self, archive: Path) -> None:
         """
-        Decompresses and installs pixi from the downloaded archive.
+        Decompress and installs pixi from the downloaded archive.
 
         Args:
             archive: Path to the downloaded archive file.

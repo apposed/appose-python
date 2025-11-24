@@ -57,7 +57,7 @@ class PixiBuilder(BaseBuilder):
 
     def conda(self, *packages: str) -> PixiBuilder:
         """
-        Adds conda packages to the environment.
+        Add conda packages to the environment.
 
         Args:
             packages: Conda package specifications (e.g., "numpy", "python>=3.8")
@@ -70,7 +70,7 @@ class PixiBuilder(BaseBuilder):
 
     def pypi(self, *packages: str) -> PixiBuilder:
         """
-        Adds PyPI packages to the environment.
+        Add PyPI packages to the environment.
 
         Args:
             packages: PyPI package specifications (e.g., "matplotlib", "requests==2.28.0")
@@ -83,7 +83,7 @@ class PixiBuilder(BaseBuilder):
 
     def build(self) -> Environment:
         """
-        Builds the Pixi environment.
+        Build the Pixi environment.
 
         Returns:
             The newly constructed Environment
@@ -230,7 +230,7 @@ class PixiBuilder(BaseBuilder):
 
     def wrap(self, env_dir: str | Path) -> Environment:
         """
-        Wraps an existing Pixi environment directory.
+        Wrap an existing Pixi environment directory.
 
         Args:
             env_dir: The existing environment directory to wrap
@@ -267,7 +267,7 @@ class PixiBuilder(BaseBuilder):
 
     def _create_environment(self, pixi: Pixi, env_dir: Path) -> Environment:
         """
-        Creates an Environment for the given Pixi directory.
+        Create an Environment for the given Pixi directory.
 
         Args:
             env_dir: The Pixi environment directory
@@ -304,7 +304,7 @@ class PixiBuilderFactory(BuilderFactory):
 
     def create_builder(self) -> Builder:
         """
-        Creates a new PixiBuilder instance.
+        Create a new PixiBuilder instance.
 
         Returns:
             A new PixiBuilder instance
@@ -316,7 +316,7 @@ class PixiBuilderFactory(BuilderFactory):
 
     def supports_scheme(self, scheme: str) -> bool:
         """
-        Checks if this builder supports the given scheme.
+        Check if this builder supports the given scheme.
 
         Args:
             scheme: The scheme to check
@@ -328,7 +328,7 @@ class PixiBuilderFactory(BuilderFactory):
 
     def priority(self) -> float:
         """
-        Returns the priority for this builder.
+        Return the priority for this builder.
 
         Returns:
             Priority value (higher = more preferred)
@@ -337,7 +337,7 @@ class PixiBuilderFactory(BuilderFactory):
 
     def can_wrap(self, env_dir: str | Path) -> bool:
         """
-        Checks if this builder can wrap the given environment directory.
+        Check if this builder can wrap the given environment directory.
 
         Args:
             env_dir: The directory to check

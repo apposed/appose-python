@@ -104,7 +104,7 @@ def is_linux() -> bool:
 
 def is_executable(file: Path) -> bool:
     """
-    Checks if a file is executable.
+    Check if a file is executable.
 
     On Windows, this checks for .exe extension.
     On POSIX systems, this checks the executable bit.

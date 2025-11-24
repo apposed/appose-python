@@ -43,7 +43,7 @@ from abc import ABC, abstractmethod
 
 class Scheme(ABC):
     """
-    Represents a configuration file scheme for environment builders.
+    Represent a configuration file scheme for environment builders.
 
     Each scheme encapsulates format-specific knowledge about a configuration file type
     (e.g., pixi.toml, pyproject.toml, environment.yml, requirements.txt).
@@ -52,7 +52,7 @@ class Scheme(ABC):
     @abstractmethod
     def name(self) -> str:
         """
-        Gets the name of this scheme.
+        Get the name of this scheme.
 
         Returns:
             The scheme name (e.g., "pixi.toml", "environment.yml")
@@ -62,7 +62,7 @@ class Scheme(ABC):
     @abstractmethod
     def priority(self) -> float:
         """
-        Gets the priority of this scheme for detection ordering.
+        Get the priority of this scheme for detection ordering.
 
         Higher priority schemes are tested first. This ensures more specific
         schemes (e.g., pyproject.toml) are checked before less specific ones
@@ -76,7 +76,7 @@ class Scheme(ABC):
     @abstractmethod
     def env_name(self, content: str) -> str | None:
         """
-        Extracts the environment name from configuration content.
+        Extract the environment name from configuration content.
 
         If no name is found in the content, returns None.
 
@@ -91,7 +91,7 @@ class Scheme(ABC):
     @abstractmethod
     def supports_content(self, content: str) -> bool:
         """
-        Tests whether this scheme can handle the given configuration content.
+        Test whether this scheme can handle the given configuration content.
 
         Implementations should use heuristics to detect their format.
 
@@ -308,7 +308,7 @@ _SCHEMES: list[Scheme] = sorted(
 
 def from_content(content: str) -> Scheme:
     """
-    Detects and returns the appropriate scheme for the given configuration content.
+    Detect and returns the appropriate scheme for the given configuration content.
 
     Args:
         content: Configuration file content
@@ -330,7 +330,7 @@ def from_content(content: str) -> Scheme:
 
 def from_name(name: str) -> Scheme:
     """
-    Returns the scheme with the given name.
+    Return the scheme with the given name.
 
     Args:
         name: Scheme name (e.g., "pixi.toml", "environment.yml")

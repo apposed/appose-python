@@ -389,7 +389,7 @@ def custom() -> SimpleBuilder:
 def _is_url(source: str) -> bool:
     """
     Check if string appears to be a URL.
-    Detects common URL schemes (http, https, ftp, file, jar) by using
+    Detect common URL schemes (http, https, ftp, file, jar) by using
     a pattern of 3+ letter scheme followed by "://" to avoid matching
     Windows drive letters like "C:".
 

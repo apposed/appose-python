@@ -78,7 +78,7 @@ class Tool(ABC):
 
     def set_output_consumer(self, consumer: Callable[[str], None]) -> None:
         """
-        Sets a consumer to receive standard output from the tool process.
+        Set a consumer to receive standard output from the tool process.
 
         Args:
             consumer: Consumer that processes output strings.
@@ -87,7 +87,7 @@ class Tool(ABC):
 
     def set_error_consumer(self, consumer: Callable[[str], None]) -> None:
         """
-        Sets a consumer to receive standard error from the tool process.
+        Set a consumer to receive standard error from the tool process.
 
         Args:
             consumer: Consumer that processes error strings.
@@ -98,7 +98,7 @@ class Tool(ABC):
         self, consumer: Callable[[int, int], None]
     ) -> None:
         """
-        Sets a consumer to track download progress during tool installation.
+        Set a consumer to track download progress during tool installation.
 
         Args:
             consumer: Consumer that receives (current, total) progress updates.
@@ -107,7 +107,7 @@ class Tool(ABC):
 
     def set_env_vars(self, env_vars: dict[str, str]) -> None:
         """
-        Sets environment variables to be passed to tool processes.
+        Set environment variables to be passed to tool processes.
 
         Args:
             env_vars: Dictionary of environment variable names to values.
@@ -117,7 +117,7 @@ class Tool(ABC):
 
     def set_flags(self, flags: list[str]) -> None:
         """
-        Sets additional command-line flags to pass to tool commands.
+        Set additional command-line flags to pass to tool commands.
 
         Args:
             flags: List of command-line flags.
@@ -155,7 +155,7 @@ class Tool(ABC):
 
     def install(self) -> None:
         """
-        Downloads and installs the external tool.
+        Download and installs the external tool.
 
         Raises:
             IOError: If an I/O error occurs.
@@ -168,7 +168,7 @@ class Tool(ABC):
 
     def is_installed(self) -> bool:
         """
-        Gets whether the tool is installed or not.
+        Get whether the tool is installed or not.
 
         Returns:
             True if the tool is installed, False otherwise.
@@ -181,7 +181,7 @@ class Tool(ABC):
 
     def exec(self, *args: str, cwd: Path | None = None) -> None:
         """
-        Executes a tool command with the specified arguments.
+        Execute a tool command with the specified arguments.
 
         Args:
             *args: Command arguments for the tool.
@@ -198,7 +198,7 @@ class Tool(ABC):
 
     def _exec_direct(self, *args: str) -> None:
         """
-        Executes a tool command with the specified arguments, without validating the
+        Execute a tool command with the specified arguments, without validating the
         tool installation beforehand, without passing output to external listeners
         (see set_output_consumer and set_error_consumer), and without including flags.
 
@@ -215,7 +215,7 @@ class Tool(ABC):
 
     def _download(self) -> Path:
         """
-        Downloads the tool from its URL.
+        Download the tool from its URL.
 
         Returns:
             Path to the downloaded file.
@@ -228,7 +228,7 @@ class Tool(ABC):
     @abstractmethod
     def _decompress(self, archive: Path) -> None:
         """
-        Decompresses and installs the tool from the downloaded archive.
+        Decompress and installs the tool from the downloaded archive.
 
         Args:
             archive: Path to the downloaded archive file.
@@ -240,7 +240,7 @@ class Tool(ABC):
 
     def _output(self, line: str) -> None:
         """
-        Handles a line from the tool's standard output stream.
+        Handle a line from the tool's standard output stream.
 
         - Captures the output for later inclusion in error messages.
         - Updates the output consumer with a message, if one is registered.
@@ -255,7 +255,7 @@ class Tool(ABC):
 
     def _error(self, line: str) -> None:
         """
-        Handles a line from the tool's standard error stream.
+        Handle a line from the tool's standard error stream.
 
         - Captures the error for later inclusion in error messages.
         - Updates the error consumer with a message, if one is registered.
@@ -270,7 +270,7 @@ class Tool(ABC):
 
     def _update_download_progress(self, current: int, total: int) -> None:
         """
-        Updates the download progress consumer, if one is registered.
+        Update the download progress consumer, if one is registered.
 
         Args:
             current: Current progress value.
@@ -283,7 +283,7 @@ class Tool(ABC):
         self, cwd: Path | None, silent: bool, include_flags: bool, args: tuple[str, ...]
     ) -> None:
         """
-        Executes a tool command with the specified arguments.
+        Execute a tool command with the specified arguments.
 
         Args:
             cwd: Working directory for the command (None to use tool's root directory).

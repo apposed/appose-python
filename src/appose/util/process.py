@@ -81,7 +81,7 @@ def run(
     error_consumer: Callable[[str], None] | None = None,
 ) -> int:
     """
-    Runs a process and captures stdout and stderr, reporting output to consumers.
+    Run a process and captures stdout and stderr, reporting output to consumers.
 
     Args:
         cmd: Either a list of command arguments or an existing Popen object.
@@ -150,7 +150,7 @@ def _read_streams(
     error: Callable[[str], None] | None,
 ) -> None:
     """
-    Reads stdout and stderr streams from a process, reporting output to consumers.
+    Read stdout and stderr streams from a process, reporting output to consumers.
     Uses separate threads to read each stream concurrently to avoid blocking.
 
     Args:
@@ -205,7 +205,7 @@ def _read_streams(
 
 def _read_stream(stream, consumer: Callable[[str], None] | None) -> None:
     """
-    Reads a single stream until EOF, reporting complete lines and any final partial line.
+    Read a single stream until EOF, reporting complete lines and any final partial line.
 
     Args:
         stream: The input stream to read.

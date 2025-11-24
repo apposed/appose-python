@@ -205,7 +205,7 @@ class Worker:
 
     def run(self) -> None:
         """
-        Processes tasks from the task queue.
+        Process tasks from the task queue.
         """
         self.running = True
         Thread(target=self._process_input, name="Appose-Receiver").start()

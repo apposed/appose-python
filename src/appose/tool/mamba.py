@@ -130,7 +130,7 @@ class Mamba(Tool):
 
     def _decompress(self, archive: Path) -> None:
         """
-        Decompresses and installs micromamba from the downloaded archive.
+        Decompress and installs micromamba from the downloaded archive.
 
         Args:
             archive: Path to the downloaded archive file.
@@ -157,7 +157,7 @@ class Mamba(Tool):
 
     def create(self, env_dir: Path) -> None:
         """
-        Creates an empty conda environment at the specified directory.
+        Create an empty conda environment at the specified directory.
         This is useful for two-step builds: create empty, then update with environment.yml.
 
         Args:
@@ -171,7 +171,7 @@ class Mamba(Tool):
 
     def update(self, env_dir: Path, env_yaml: Path) -> None:
         """
-        Updates an existing conda environment from an environment.yml file.
+        Update an existing conda environment from an environment.yml file.
 
         Args:
             env_dir: The directory of the existing environment.

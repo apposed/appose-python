@@ -29,7 +29,7 @@ def download(
     progress_consumer: Callable[[int, int], None] | None = None,
 ) -> Path:
     """
-    Downloads a file from a URL to a temporary file.
+    Download a file from a URL to a temporary file.
 
     Args:
         name: Base name for the temporary file.
@@ -134,7 +134,7 @@ def un_bzip2(source: Path, destination: Path) -> None:
 
 def unpack(input_file: Path, output_dir: Path) -> None:
     """
-    Unpacks an archive file to a directory.
+    Unpack an archive file to a directory.
 
     Supports .tar, .tar.bz2, .tar.gz, and .zip formats.
 
@@ -271,7 +271,7 @@ def un_tar_bz2(input_file: Path, output_dir: Path) -> None:
 
 def redirected_url(url: str) -> str:
     """
-    Follows HTTP redirects to get the final URL.
+    Follow HTTP redirects to get the final URL.
 
     This method handles response codes 301, 302, 303, etc.
 
@@ -341,7 +341,7 @@ def get_file_size(url: str) -> int:
 
 def user_agent() -> str:
     """
-    Generates a User-Agent string for HTTP requests.
+    Generate a User-Agent string for HTTP requests.
 
     Returns:
         User-Agent string with Python version and platform info.

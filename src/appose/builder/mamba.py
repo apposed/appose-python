@@ -53,7 +53,7 @@ class MambaBuilder(BaseBuilder):
 
     def build(self) -> Environment:
         """
-        Builds the Mamba environment.
+        Build the Mamba environment.
 
         Returns:
             The newly constructed Environment
@@ -147,7 +147,7 @@ class MambaBuilder(BaseBuilder):
 
     def wrap(self, env_dir: str | Path) -> Environment:
         """
-        Wraps an existing Mamba/conda environment directory.
+        Wrap an existing Mamba/conda environment directory.
 
         Args:
             env_dir: The existing environment directory to wrap
@@ -175,7 +175,7 @@ class MambaBuilder(BaseBuilder):
 
     def _create_environment(self, mamba: Mamba, env_dir: Path) -> Environment:
         """
-        Creates an Environment for the given Mamba/conda directory.
+        Create an Environment for the given Mamba/conda directory.
 
         Args:
             env_dir: The Mamba/conda environment directory
@@ -201,7 +201,7 @@ class MambaBuilderFactory(BuilderFactory):
 
     def create_builder(self) -> Builder:
         """
-        Creates a new MambaBuilder instance.
+        Create a new MambaBuilder instance.
 
         Returns:
             A new MambaBuilder instance
@@ -213,7 +213,7 @@ class MambaBuilderFactory(BuilderFactory):
 
     def supports_scheme(self, scheme: str) -> bool:
         """
-        Checks if this builder supports the given scheme.
+        Check if this builder supports the given scheme.
 
         Args:
             scheme: The scheme to check
@@ -225,7 +225,7 @@ class MambaBuilderFactory(BuilderFactory):
 
     def priority(self) -> float:
         """
-        Returns the priority for this builder.
+        Return the priority for this builder.
 
         Returns:
             Priority value (higher = more preferred)
@@ -234,7 +234,7 @@ class MambaBuilderFactory(BuilderFactory):
 
     def can_wrap(self, env_dir: str | Path) -> bool:
         """
-        Checks if this builder can wrap the given environment directory.
+        Check if this builder can wrap the given environment directory.
 
         Args:
             env_dir: The directory to check

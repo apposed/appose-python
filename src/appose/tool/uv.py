@@ -113,7 +113,7 @@ class Uv(Tool):
 
     def _decompress(self, archive: Path) -> None:
         """
-        Decompresses and installs uv from the downloaded archive.
+        Decompress and installs uv from the downloaded archive.
 
         Args:
             archive: Path to the downloaded archive file.
@@ -236,7 +236,7 @@ class Uv(Tool):
     def sync(self, project_dir: Path, python_version: str | None = None) -> None:
         """
         Synchronize a project's dependencies from pyproject.toml.
-        Creates a virtual environment at projectDir/.venv and installs dependencies.
+        Create a virtual environment at projectDir/.venv and installs dependencies.
 
         Args:
             project_dir: The project directory containing pyproject.toml.

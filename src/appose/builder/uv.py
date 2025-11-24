@@ -56,7 +56,7 @@ class UvBuilder(BaseBuilder):
 
     def python(self, version: str) -> UvBuilder:
         """
-        Specifies the Python version to use for the virtual environment.
+        Specify the Python version to use for the virtual environment.
 
         Args:
             version: Python version (e.g., "3.11", "3.10")
@@ -69,7 +69,7 @@ class UvBuilder(BaseBuilder):
 
     def include(self, *packages: str) -> UvBuilder:
         """
-        Adds PyPI packages to install in the virtual environment.
+        Add PyPI packages to install in the virtual environment.
 
         Args:
             packages: PyPI package specifications (e.g., "numpy", "requests==2.28.0")
@@ -85,7 +85,7 @@ class UvBuilder(BaseBuilder):
 
     def build(self) -> Environment:
         """
-        Builds the uv environment.
+        Build the uv environment.
 
         Returns:
             The newly constructed Environment
@@ -200,7 +200,7 @@ class UvBuilder(BaseBuilder):
 
     def wrap(self, env_dir: str | Path) -> Environment:
         """
-        Wraps an existing uv/venv environment directory.
+        Wrap an existing uv/venv environment directory.
 
         Args:
             env_dir: The existing environment directory to wrap
@@ -237,7 +237,7 @@ class UvBuilder(BaseBuilder):
 
     def _create_environment(self, env_dir: Path) -> Environment:
         """
-        Creates an Environment for the given uv/venv directory.
+        Create an Environment for the given uv/venv directory.
 
         Args:
             env_dir: The uv/venv environment directory
@@ -272,7 +272,7 @@ class UvBuilderFactory(BuilderFactory):
 
     def create_builder(self) -> Builder:
         """
-        Creates a new UvBuilder instance.
+        Create a new UvBuilder instance.
 
         Returns:
             A new UvBuilder instance
@@ -284,7 +284,7 @@ class UvBuilderFactory(BuilderFactory):
 
     def supports_scheme(self, scheme: str) -> bool:
         """
-        Checks if this builder supports the given scheme.
+        Check if this builder supports the given scheme.
 
         Args:
             scheme: The scheme to check
@@ -296,7 +296,7 @@ class UvBuilderFactory(BuilderFactory):
 
     def priority(self) -> float:
         """
-        Returns the priority for this builder.
+        Return the priority for this builder.
 
         Returns:
             Priority value (higher = more preferred)
@@ -305,7 +305,7 @@ class UvBuilderFactory(BuilderFactory):
 
     def can_wrap(self, env_dir: str | Path) -> bool:
         """
-        Checks if this builder can wrap the given environment directory.
+        Check if this builder can wrap the given environment directory.
 
         Args:
             env_dir: The directory to check

@@ -41,7 +41,7 @@ def location(c: type) -> Path | None:
 
 def file_type(name: str) -> str:
     """
-    Extracts the file extension(s) from a filename.
+    Extract the file extension(s) from a filename.
 
     Args:
         name: The filename to extract extension from.
@@ -58,7 +58,7 @@ def file_type(name: str) -> str:
 
 def find_exe(dirs: list[str], exes: list[str]) -> Path | None:
     """
-    Finds an executable file by searching for it in a list of directories.
+    Find an executable file by searching for it in a list of directories.
 
     Args:
         dirs: List of directory paths to search.
@@ -84,7 +84,7 @@ def find_exe(dirs: list[str], exes: list[str]) -> Path | None:
 
 def move_directory(src_dir: Path, dest_dir: Path, overwrite: bool) -> None:
     """
-    Merges the files of the given source directory into the specified destination directory.
+    Merge the files of the given source directory into the specified destination directory.
 
     For example, move_directory(foo, bar) would move:
     - foo/a.txt → bar/a.txt
@@ -111,7 +111,7 @@ def move_directory(src_dir: Path, dest_dir: Path, overwrite: bool) -> None:
 
 def move_file(src_file: Path, dest_dir: Path, overwrite: bool) -> None:
     """
-    Moves the given source file to the destination directory,
+    Move the given source file to the destination directory,
     creating intermediate destination directories as needed.
 
     If the destination file already exists, one of two things will happen:
@@ -163,7 +163,7 @@ def move_file(src_file: Path, dest_dir: Path, overwrite: bool) -> None:
 
 def rename_to_backup(src_file: Path, dest_dir: Path | None = None) -> None:
     """
-    Renames the given file to a backup filename.
+    Rename the given file to a backup filename.
 
     The file will be renamed to filename.ext.old, or filename.ext.0.old,
     filename.ext.1.old, etc., if filename.ext.old already exists.
@@ -203,7 +203,7 @@ def rename_to_backup(src_file: Path, dest_dir: Path | None = None) -> None:
 
 def delete_recursively(dir: Path) -> None:
     """
-    Deletes a directory and all its contents recursively.
+    Delete a directory and all its contents recursively.
     Properly handles symlinks including broken ones.
 
     Args:
@@ -223,7 +223,7 @@ def delete_recursively(dir: Path) -> None:
 
 def ensure_directory(file: Path) -> None:
     """
-    Checks that the given path is an existing directory, raising an exception if not.
+    Check that the given path is an existing directory, raising an exception if not.
 
     Args:
         file: The path to check.
