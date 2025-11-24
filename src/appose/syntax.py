@@ -230,5 +230,5 @@ def validate(service: Service) -> None:
     Raises:
         ValueError: If no script syntax is configured
     """
-    if service.syntax() is None:
+    if service._syntax is None:
         raise ValueError("No script syntax configured for this service")

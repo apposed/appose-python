@@ -41,7 +41,7 @@ from traceback import format_exc
 from typing import Any, Callable
 from uuid import uuid4
 
-from .syntax import ScriptSyntax
+from .syntax import ScriptSyntax, get as syntax_from_name
 from .util.types import Args, decode, encode
 
 
@@ -79,7 +79,7 @@ class Service:
     _service_count: int = 0
 
     def __init__(
-        self, cwd: str | Path, args: list[str], syntax: ScriptSyntax | None = None
+        self, cwd: str | Path, args: list[str]
     ) -> None:
         self._cwd: Path = Path(cwd)
         self._args: list[str] = args[:]
@@ -91,16 +91,6 @@ class Service:
         self._stderr_thread: threading.Thread | None = None
         self._monitor_thread: threading.Thread | None = None
         self._debug_callback: Callable[[Any], Any] | None = None
-        self._syntax: ScriptSyntax | None = syntax
-
-    def syntax(self) -> ScriptSyntax | None:
-        """
-        Returns the script syntax associated with this service.
-
-        Returns:
-            The script syntax, or None if not configured.
-        """
-        return self._syntax
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
         """
@@ -161,6 +151,25 @@ class Service:
         """
         self.start()
         return Task(self, script, inputs, queue)
+
+    def syntax(self, syntax: str | ScriptSyntax) -> Service:
+        """
+        Declares the script syntax of this service.
+
+        This value determines which {@link ScriptSyntax} implementation is used
+        for generating language-specific scripts.
+
+        This method is called directly by Environment.python() and
+        Environment.groovy() when creating services of those types.
+        It can also be called manually to support custom languages with
+        registered ScriptSyntax plugins.
+        
+        :param syntax: The type identifier (e.g., "python", "groovy").
+        :return: This service object, for chaining method calls.
+        :raises: ValueError If no syntax plugin is found for the given type.
+        """
+        self._syntax = syntax if isinstance(syntax, ScriptSyntax) else syntax_from_name(syntax)
+        return self
 
     def get_var(self, name: str) -> Any:
         """

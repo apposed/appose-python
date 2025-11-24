@@ -36,6 +36,7 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
+from ..scheme import from_content as scheme_from_content
 from ..tool.pixi import Pixi
 
 
@@ -48,14 +49,10 @@ class PixiBuilder(BaseBuilder):
 
     def __init__(self):
         super().__init__()
-        self.conda_packages: list[str] = []
-        self.pypi_packages: list[str] = []
+        self._conda_packages: list[str] = []
+        self._pypi_packages: list[str] = []
 
-        # Note: Already assigned in BaseBuilder, but stubgen wants these here, too.
-        self.source_content: str | None = None
-        self.scheme: str | None = None
-
-    def name(self) -> str:
+    def env_type(self) -> str:
         return "pixi"
 
     def conda(self, *packages: str) -> PixiBuilder:
@@ -68,7 +65,7 @@ class PixiBuilder(BaseBuilder):
         Returns:
             This builder instance
         """
-        self.conda_packages.extend(packages)
+        self._conda_packages.extend(packages)
         return self
 
     def pypi(self, *packages: str) -> PixiBuilder:
@@ -81,7 +78,7 @@ class PixiBuilder(BaseBuilder):
         Returns:
             This builder instance
         """
-        self.pypi_packages.extend(packages)
+        self._pypi_packages.extend(packages)
         return self
 
     def channels(self, *channels: str) -> PixiBuilder:
@@ -106,7 +103,7 @@ class PixiBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
-        env_dir = self._env_dir()
+        env_dir = self._resolve_env_dir()
 
         # Check for incompatible existing environments
         if (env_dir / "conda-meta").exists() and not (env_dir / ".pixi").exists():
@@ -124,20 +121,20 @@ class PixiBuilder(BaseBuilder):
 
         # Set up progress/output consumers
         pixi.set_output_consumer(
-            lambda msg: [sub(msg) for sub in self.output_subscribers]
+            lambda msg: [sub(msg) for sub in self._output_subscribers]
         )
         pixi.set_error_consumer(
-            lambda msg: [sub(msg) for sub in self.error_subscribers]
+            lambda msg: [sub(msg) for sub in self._error_subscribers]
         )
         pixi.set_download_progress_consumer(
             lambda cur, max: [
-                sub("Downloading pixi", cur, max) for sub in self.progress_subscribers
+                sub("Downloading pixi", cur, max) for sub in self._progress_subscribers
             ]
         )
 
         # Pass along intended build configuration
-        pixi.set_env_vars(self.env_vars_dict)
-        pixi.set_flags(self.flags_list)
+        pixi.set_env_vars(self._env_vars)
+        pixi.set_flags(self._flags)
 
         try:
             pixi.install()
@@ -151,37 +148,37 @@ class PixiBuilder(BaseBuilder):
 
             if (
                 is_pixi_dir
-                and self.source_content is None
-                and not self.conda_packages
-                and not self.pypi_packages
+                and self._content is None
+                and not self._conda_packages
+                and not self._pypi_packages
             ):
                 # Environment already exists, just use it
                 return self._create_environment(env_dir, pixi)
 
             # Handle source-based build (file or content)
-            if self.source_content is not None:
+            if self._content is not None:
                 # Infer scheme if not explicitly set
-                if self.scheme is None:
-                    self.scheme = self._scheme().name()
+                if self._scheme is None:
+                    self._scheme = scheme_from_content(self._content)
 
                 if not env_dir.exists():
                     env_dir.mkdir(parents=True, exist_ok=True)
 
-                if self.scheme == "pixi.toml":
+                if self._scheme.name() == "pixi.toml":
                     # Write pixi.toml to envDir
                     pixi_toml_file = env_dir / "pixi.toml"
-                    pixi_toml_file.write_text(self.source_content, encoding="utf-8")
-                elif self.scheme == "pyproject.toml":
+                    pixi_toml_file.write_text(self._content, encoding="utf-8")
+                elif self._scheme.name() == "pyproject.toml":
                     # Write pyproject.toml to envDir (Pixi natively supports it)
                     pyproject_toml_file = env_dir / "pyproject.toml"
                     pyproject_toml_file.write_text(
-                        self.source_content, encoding="utf-8"
+                        self._content, encoding="utf-8"
                     )
-                elif self.scheme == "environment.yml":
+                elif self._scheme.name() == "environment.yml":
                     # Write environment.yml and import
                     environment_yaml_file = env_dir / "environment.yml"
                     environment_yaml_file.write_text(
-                        self.source_content, encoding="utf-8"
+                        self._content, encoding="utf-8"
                     )
                     # Only run init --import if pixi.toml doesn't exist yet
                     # (importing creates pixi.toml, so this avoids "pixi.toml already exists" error)
@@ -194,8 +191,8 @@ class PixiBuilder(BaseBuilder):
                         )
 
                 # Add any programmatic channels to augment source file
-                if self.channels_list:
-                    pixi.add_channels(env_dir, *self.channels_list)
+                if self._channels:
+                    pixi.add_channels(env_dir, *self._channels)
             else:
                 # Programmatic package building
                 if is_pixi_dir:
@@ -208,7 +205,7 @@ class PixiBuilder(BaseBuilder):
                 pixi.init(env_dir)
 
                 # Fail fast for vacuous environments
-                if not self.conda_packages and not self.pypi_packages:
+                if not self._conda_packages and not self._pypi_packages:
                     raise BuildException(
                         self,
                         "Cannot build empty environment programmatically. "
@@ -216,25 +213,25 @@ class PixiBuilder(BaseBuilder):
                     )
 
                 # Add channels
-                if self.channels_list:
-                    pixi.add_channels(env_dir, *self.channels_list)
+                if self._channels:
+                    pixi.add_channels(env_dir, *self._channels)
 
                 # Add conda packages
-                if self.conda_packages:
-                    pixi.add_conda_packages(env_dir, *self.conda_packages)
+                if self._conda_packages:
+                    pixi.add_conda_packages(env_dir, *self._conda_packages)
 
                 # Add PyPI packages
-                if self.pypi_packages:
-                    pixi.add_pypi_packages(env_dir, *self.pypi_packages)
+                if self._pypi_packages:
+                    pixi.add_pypi_packages(env_dir, *self._pypi_packages)
 
                 # Verify that appose was included when building programmatically
-                prog_build = bool(self.conda_packages) or bool(self.pypi_packages)
+                prog_build = bool(self._conda_packages) or bool(self._pypi_packages)
                 if prog_build:
                     import re
 
                     has_appose = any(
-                        re.match(r"^appose\b", pkg) for pkg in self.conda_packages
-                    ) or any(re.match(r"^appose\b", pkg) for pkg in self.pypi_packages)
+                        re.match(r"^appose\b", pkg) for pkg in self._conda_packages
+                    ) or any(re.match(r"^appose\b", pkg) for pkg in self._pypi_packages)
                     if not has_appose:
                         raise BuildException(
                             self,
@@ -269,16 +266,16 @@ class PixiBuilder(BaseBuilder):
         if pixi_toml.exists() and pixi_toml.is_file():
             # Read the content so rebuild() will work even after directory is deleted
             with open(pixi_toml, "r", encoding="utf-8") as f:
-                self.source_content = f.read()
-            self.scheme = "pixi.toml"
+                self._content = f.read()
+            self._scheme = scheme_from_content("pixi.toml")
         else:
             # Check for pyproject.toml
             pyproject_toml = env_path / "pyproject.toml"
             if pyproject_toml.exists() and pyproject_toml.is_file():
                 # Read the content so rebuild() will work even after directory is deleted
                 with open(pyproject_toml, "r", encoding="utf-8") as f:
-                    self.source_content = f.read()
-                self.scheme = "pyproject.toml"
+                    self._content = f.read()
+                self._scheme = scheme_from_content("pyproject.toml")
 
         # Set the base directory and build (which will detect existing env)
         self.base(env_path)
@@ -330,7 +327,7 @@ class PixiBuilderFactory(BuilderFactory):
         """
         return PixiBuilder()
 
-    def name(self) -> str:
+    def env_type(self) -> str:
         return "pixi"
 
     def supports_scheme(self, scheme: str) -> bool:

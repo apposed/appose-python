@@ -37,6 +37,7 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
+from ..scheme import from_content as scheme_from_content
 from ..tool.mamba import Mamba
 
 
@@ -47,14 +48,7 @@ class MambaBuilder(BaseBuilder):
     Mamba/Micromamba provides fast conda environment management.
     """
 
-    def __init__(self):
-        super().__init__()
-
-        # Note: Already assigned in BaseBuilder, but stubgen wants these here, too.
-        self.source_content: str | None = None
-        self.scheme: str | None = None
-
-    def name(self) -> str:
+    def env_type(self) -> str:
         return "mamba"
 
     def channels(self, *channels: str) -> MambaBuilder:
@@ -67,7 +61,8 @@ class MambaBuilder(BaseBuilder):
         Returns:
             This builder instance
         """
-        return super().channels(*channels)
+        super().channels(*channels)
+        return self
 
     def build(self) -> Environment:
         """
@@ -79,7 +74,7 @@ class MambaBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
-        env_dir = self._env_dir()
+        env_dir = self._resolve_env_dir()
 
         # Check for incompatible existing environments
         if (env_dir / ".pixi").is_dir():
@@ -103,16 +98,16 @@ class MambaBuilder(BaseBuilder):
             return self._create_environment(env_dir, mamba)
 
         # Building a new environment - config content is required
-        if self.source_content is None:
+        if self._content is None:
             raise BuildException(
                 self, "No source specified for MambaBuilder. Use .file() or .content()"
             )
 
         # Infer scheme if not explicitly set
-        if self.scheme is None:
-            self.scheme = self._scheme().name()
+        if self._scheme is None:
+            self._scheme = scheme_from_content(self._content)
 
-        if self.scheme != "environment.yml":
+        if self._scheme.name() != "environment.yml":
             raise BuildException(
                 self,
                 f"MambaBuilder only supports environment.yml scheme, got: {self.scheme}",
@@ -120,24 +115,24 @@ class MambaBuilder(BaseBuilder):
 
         # Set up progress/output consumers
         mamba.set_output_consumer(
-            lambda msg: [sub(msg) for sub in self.output_subscribers]
+            lambda msg: [sub(msg) for sub in self._output_subscribers]
         )
         mamba.set_error_consumer(
-            lambda msg: [sub(msg) for sub in self.error_subscribers]
+            lambda msg: [sub(msg) for sub in self._error_subscribers]
         )
         mamba.set_download_progress_consumer(
             lambda cur, max: [
                 sub("Downloading micromamba", cur, max)
-                for sub in self.progress_subscribers
+                for sub in self._progress_subscribers
             ]
         )
 
         # Pass along intended build configuration
-        mamba.set_env_vars(self.env_vars_dict)
-        mamba.set_flags(self.flags_list)
+        mamba.set_env_vars(self._env_vars)
+        mamba.set_flags(self._flags)
 
         # Check for unsupported features
-        if self.channels_list:
+        if self._channels:
             raise BuildException(
                 self,
                 "MambaBuilder does not yet support programmatic channel configuration. "
@@ -153,7 +148,7 @@ class MambaBuilder(BaseBuilder):
 
             # Step 2: Write environment.yml to envDir
             env_yaml = env_dir / "environment.yml"
-            env_yaml.write_text(self.source_content, encoding="utf-8")
+            env_yaml.write_text(self._content, encoding="utf-8")
 
             # Step 3: Update environment from yml
             mamba.update(env_dir, env_yaml)
@@ -185,7 +180,7 @@ class MambaBuilder(BaseBuilder):
         if env_yaml.exists() and env_yaml.is_file():
             # Read the content so rebuild() will work even after directory is deleted
             with open(env_yaml, "r", encoding="utf-8") as f:
-                self.source_content = f.read()
+                self._content = f.read()
 
         # Set the base directory and build (which will detect existing env)
         self.base(env_path)
@@ -226,7 +221,7 @@ class MambaBuilderFactory(BuilderFactory):
         """
         return MambaBuilder()
 
-    def name(self) -> str:
+    def env_type(self) -> str:
         return "mamba"
 
     def supports_scheme(self, scheme: str) -> bool:

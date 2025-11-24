@@ -35,10 +35,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .syntax import GroovySyntax, PythonSyntax, ScriptSyntax
+from .syntax import GroovySyntax, PythonSyntax
 from .util.filepath import find_exe
 from .service import Service
+
+if TYPE_CHECKING:
+    from .builder import Builder
 
 
 class Environment:
@@ -85,9 +89,9 @@ class Environment:
         # Default implementation - subclasses should override
         return {}
 
-    def builder(self):
+    def builder(self) -> Builder | None:
         """
-        Returns the builder that created this environment.
+        Get the builder that created this environment.
 
         Returns:
             The builder instance, or None if not created via a builder
@@ -97,13 +101,13 @@ class Environment:
 
     def type(self) -> str:
         """
-        Returns the type of this environment (e.g., "pixi", "mamba", "uv", "system").
+        Get the type of this environment (e.g., "pixi", "mamba", "uv").
 
         Returns:
             The environment type name
         """
         builder = self.builder()
-        return builder.name() if builder else "unknown"
+        return builder.env_type() if builder else "unknown"
 
     def python(self) -> Service:
         """
@@ -127,9 +131,8 @@ class Environment:
         return self.service(
             python_exes,
             "-c",
-            "import appose.python_worker; appose.python_worker.main()",
-            syntax=PythonSyntax(),
-        )
+            "import appose.python_worker; appose.python_worker.main()"
+        ).syntax(PythonSyntax())
 
     def groovy(
         self,
@@ -159,16 +162,14 @@ class Environment:
         return self.java(
             "org.apposed.appose.GroovyWorker",
             class_path=class_path,
-            jvm_args=jvm_args,
-            syntax=GroovySyntax(),
-        )
+            jvm_args=jvm_args
+        ).syntax(GroovySyntax())
 
     def java(
         self,
         main_class: str,
         class_path: list[str] | None = None,
         jvm_args: list[str] | None = None,
-        syntax: ScriptSyntax | None = None,
     ) -> Service:
         # Collect classpath elements into a set, to avoid duplicate entries.
         cp: dict[str] = {}  # NB: Use dict instead of set to maintain insertion order.
@@ -198,11 +199,9 @@ class Environment:
             "jre/bin/java",
             "jre/bin/java.exe",
         ]
-        return self.service(java_exes, *args, syntax=syntax)
+        return self.service(java_exes, *args)
 
-    def service(
-        self, exes: list[str], *args, syntax: ScriptSyntax | None = None
-    ) -> Service:
+    def service(self, exes: list[str], *args) -> Service:
         """
         Create a service with the given command line arguments.
 
@@ -260,4 +259,4 @@ class Environment:
         all_args.append(exe_path)
         all_args.extend(args)
 
-        return Service(self.base(), all_args, syntax)
+        return Service(self.base(), all_args)

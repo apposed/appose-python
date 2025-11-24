@@ -121,7 +121,7 @@ def create(service: Service, var: str, queue: str | None = None) -> Any:
                 # Use the service's ScriptSyntax to generate the method invocation script.
                 # This allows support for different languages with varying syntax.
                 syntax.validate(self._service)
-                script = self._service.syntax().invoke_method(
+                script = self._service._syntax.invoke_method(
                     self._var, name, arg_names
                 )
 

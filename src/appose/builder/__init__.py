@@ -45,9 +45,12 @@ from pathlib import Path
 from typing import Callable
 from urllib.request import urlopen
 
-from .. import scheme
 from ..environment import Environment
-from ..scheme import Scheme
+from ..scheme import (
+    Scheme,
+    from_content as scheme_from_content,
+    from_name as scheme_from_name,
+)
 from ..util.filepath import appose_envs_dir
 
 
@@ -75,11 +78,11 @@ class BuildException(Exception):
             cause: The underlying exception that caused the build to fail
         """
         if message is None:
-            noun = "build" if builder is None else f"{builder.name()} build"
+            noun = "build" if builder is None else f"{builder.env_type()} build"
             verb = "interrupted" if isinstance(cause, KeyboardInterrupt) else "failed"
             message = f"{noun} {verb}"
         super().__init__(message)
-        self.builder: Builder | None = builder
+        self._builder: Builder | None = builder
         self.__cause__: Exception | None = cause
 
 
@@ -94,19 +97,19 @@ class Builder(ABC):
     """
 
     @abstractmethod
-    def name(self) -> str:
+    def env_type(self) -> str:
         """
-        Returns the name of this builder (e.g., "pixi", "mamba", "uv", "custom").
+        Get the environment type constructed by this builder (e.g., "pixi", "mamba", "uv").
 
         Returns:
-            The builder name
+            The builder's associated environment type.
         """
         ...
 
     @abstractmethod
     def build(self) -> Environment:
         """
-        Builds the environment. This is the terminator method for any fluid building chain.
+        Build the environment. This is the terminator method for any fluid building chain.
 
         Returns:
             The newly constructed Appose Environment
@@ -119,7 +122,7 @@ class Builder(ABC):
 
     def rebuild(self) -> Environment:
         """
-        Rebuilds the environment from scratch.
+        Rebuild the environment from scratch.
 
         Deletes the existing environment directory (if it exists) and rebuilds it
         using the current builder configuration. This is more robust than trying to
@@ -142,7 +145,7 @@ class Builder(ABC):
     @abstractmethod
     def delete(self) -> None:
         """
-        Deletes the builder's linked environment directory, if any.
+        Delete the builder's linked environment directory, if any.
 
         Raises:
             OSError: If something goes wrong during deletion
@@ -152,7 +155,7 @@ class Builder(ABC):
     @abstractmethod
     def wrap(self, env_dir: str | Path) -> Environment:
         """
-        Wraps an existing environment directory, detecting and using any
+        Wrap an existing environment directory, detecting and using any
         configuration files present for future rebuild() calls.
 
         This method examines the directory for known configuration files
@@ -173,7 +176,7 @@ class Builder(ABC):
     @abstractmethod
     def env(self, **vars: dict[str, str]) -> Builder:
         """
-        Sets environment variables to be passed to worker processes.
+        Set environment variables to be passed to worker processes.
 
         Args:
             vars: Dictionary of environment variable names to values
@@ -184,9 +187,9 @@ class Builder(ABC):
         ...
 
     @abstractmethod
-    def set_name(self, env_name: str) -> Builder:
+    def name(self, env_name: str) -> Builder:
         """
-        Sets the name for the environment.
+        Set the name for the environment.
         The environment will be created in the standard Appose environments directory with this name.
 
         Args:
@@ -200,8 +203,8 @@ class Builder(ABC):
     @abstractmethod
     def base(self, env_dir: str | Path) -> Builder:
         """
-        Sets the base directory for the environment.
-        For many builders, this overrides any name specified via set_name().
+        Set the base directory for the environment.
+        For many builders, this overrides any name specified via name().
 
         Args:
             env_dir: The directory for the environment
@@ -381,28 +384,28 @@ class BuilderFactory(ABC):
     @abstractmethod
     def create_builder(self) -> Builder:
         """
-        Creates a new builder instance with no configuration.
+        Create a new builder instance with no configuration.
         Configuration should be provided via the fluent API (e.g., content, scheme).
 
         Returns:
-            A new builder instance
+            A new builder instance.
         """
         ...
 
     @abstractmethod
-    def name(self) -> str:
+    def env_type(self) -> str:
         """
-        Returns the name of this builder (e.g., "pixi", "mamba", "custom").
+	    Get the environment type handled by this builder (e.g., "pixi", "mamba", "uv").
 
         Returns:
-            The builder name
+	        The builder's associated environment type.
         """
         ...
 
     @abstractmethod
     def supports_scheme(self, scheme: str) -> bool:
         """
-        Checks if this builder supports the given scheme.
+        Check if this builder supports the given scheme.
 
         Args:
             scheme: The scheme to check (e.g., "environment.yml", "conda", "pypi")
@@ -444,20 +447,20 @@ class BaseBuilder(Builder):
     """
 
     def __init__(self):
-        self.progress_subscribers: list[ProgressConsumer] = []
-        self.output_subscribers: list[Callable[[str], None]] = []
-        self.error_subscribers: list[Callable[[str], None]] = []
-        self.env_vars_dict: dict[str, str] = {}
-        self.channels_list: list[str] = []
-        self.flags_list: list[str] = []
-        self.env_name: str | None = None
-        self.env_dir: Path | None = None
-        self.source_content: str | None = None
-        self.scheme: str | None = None
+        self._progress_subscribers: list[ProgressConsumer] = []
+        self._output_subscribers: list[Callable[[str], None]] = []
+        self._error_subscribers: list[Callable[[str], None]] = []
+        self._env_vars: dict[str, str] = {}
+        self._channels: list[str] = []
+        self._flags: list[str] = []
+        self._env_name: str | None = None
+        self._env_dir: Path | None = None
+        self._content: str | None = None
+        self._scheme: Scheme | None = None
 
     def delete(self) -> None:
         """Default implementation: delete env_dir if it exists."""
-        dir_path = self._env_dir()
+        dir_path = self._env_dir
         if dir_path.exists():
             shutil.rmtree(dir_path)
 
@@ -471,79 +474,78 @@ class BaseBuilder(Builder):
         self.base(env_path)
         return self.build()
 
-    def env(self, **vars: dict[str, str]) -> BaseBuilder:
+    def env(self, **vars: str) -> BaseBuilder:
         """Set environment variables."""
-        self.env_vars_dict.update(vars)
+        self._env_vars.update(vars)
         return self
 
-    def set_name(self, env_name: str) -> BaseBuilder:
+    def name(self, env_name: str) -> BaseBuilder:
         """Set the environment name."""
-        self.env_name = env_name
+        self._env_name = env_name
         return self
 
     def base(self, env_dir: str | Path) -> BaseBuilder:
         """Set the base directory."""
-        self.env_dir = Path(env_dir)
+        self._env_dir = Path(env_dir)
         return self
 
     def channels(self, *channels: str) -> BaseBuilder:
         """Add channels."""
-        self.channels_list.extend(channels)
+        self._channels.extend(channels)
         return self
 
     def content(self, content: str) -> BaseBuilder:
         """Set configuration content."""
-        self.source_content = content
+        self._content = content
         return self
 
-    def scheme(self, scheme: str) -> BaseBuilder:
+    def scheme(self, scheme: str | Scheme) -> BaseBuilder:
         """Set the explicit scheme."""
-        self.scheme = scheme
+        self._scheme = scheme if isinstance(scheme, Scheme) else scheme_from_name(scheme)
         return self
 
     def subscribe_progress(self, subscriber: ProgressConsumer) -> BaseBuilder:
         """Register a progress callback."""
-        self.progress_subscribers.append(subscriber)
+        self._progress_subscribers.append(subscriber)
         return self
 
     def subscribe_output(self, subscriber: Callable[[str], None]) -> BaseBuilder:
         """Register an output callback."""
-        self.output_subscribers.append(subscriber)
+        self._output_subscribers.append(subscriber)
         return self
 
     def subscribe_error(self, subscriber: Callable[[str], None]) -> BaseBuilder:
         """Register an error callback."""
-        self.error_subscribers.append(subscriber)
+        self._error_subscribers.append(subscriber)
         return self
 
     def flags(self, *flags: str) -> BaseBuilder:
         """Add command-line flags."""
-        self.flags_list.extend(flags)
+        self._flags.extend(flags)
         return self
 
-    # Helper methods
+    # -- Helper methods --
 
-    def _env_name(self) -> str:
-        """Get the environment name, extracting from content if needed."""
-        if self.env_name:
-            return self.env_name
-        # Extract name from source content
-        scheme = self._scheme()
-        return scheme.env_name(self.source_content) or "appose-env"
+    def _resolve_env_dir(self) -> Path:
+        """Determine the environment directory path."""
+        if self._env_dir:
+            return self._env_dir
 
-    def _env_dir(self) -> Path:
-        """Get the environment directory path."""
-        if self.env_dir:
-            return self.env_dir
-        # Fall back to Appose-managed environments directory
-        return Path(appose_envs_dir()) / self._env_name()
+        # No explicit environment directory set; fall back to
+        # a subfolder of the Appose-managed environments directory.
+        dir_name = self._env_name if self._env_name is not None else (
+            # No explicit environment name set; extract name from the source content.
+            self._resolve_scheme().env_name(self._content)
+        )
 
-    def _scheme(self) -> Scheme:
-        """Get the scheme, detecting from content if needed."""
-        if self.scheme:
-            return scheme.from_name(self.scheme)
-        if self.source_content:
-            return scheme.from_content(self.source_content)
+        return Path(appose_envs_dir()) / dir_name
+
+    def _resolve_scheme(self) -> Scheme:
+        """Determine the scheme, detecting from content if needed."""
+        if self._scheme:
+            return self._scheme
+        if self._content:
+            return scheme_from_content(self._content)
         raise ValueError("Cannot determine scheme: neither scheme nor content is set")
 
     def _create_env(
@@ -561,21 +563,21 @@ class BaseBuilder(Builder):
             A new Environment instance
         """
 
-        # Create a simple Environment implementation
         class BuiltEnvironment(Environment):
+            """A simple Environment implementation."""
             def __init__(
                 self,
                 base_path: str,
-                bin_path_list: list[str],
-                launch_arg_list: list[str],
-                env_var_dict: dict[str, str],
-                parent_builder: Builder,
+                bin_paths: list[str],
+                launch_args: list[str],
+                env_vars: dict[str, str],
+                builder: Builder,
             ):
                 super().__init__(base_path)
-                self._bin_paths: list[str] = bin_path_list
-                self._launch_args: list[str] = launch_arg_list
-                self._env_vars: dict[str, str] = env_var_dict
-                self._builder: Builder = parent_builder
+                self._bin_paths: list[str] = bin_paths
+                self._launch_args: list[str] = launch_args
+                self._env_vars: dict[str, str] = env_vars
+                self._builder: Builder = builder
 
             def bin_paths(self) -> list[str]:
                 return self._bin_paths
@@ -586,10 +588,10 @@ class BaseBuilder(Builder):
             def env_vars(self) -> dict[str, str]:
                 return self._env_vars
 
-            def builder(self) -> Builder | None:
+            def builder(self) -> Builder:
                 return self._builder
 
-        return BuiltEnvironment(base, bin_paths, launch_args, self.env_vars_dict, self)
+        return BuiltEnvironment(base, bin_paths, launch_args, self._env_vars, self)
 
 
 class SimpleBuilder(BaseBuilder):
@@ -603,7 +605,7 @@ class SimpleBuilder(BaseBuilder):
         super().__init__()
         self._custom_bin_paths: list[str] = []
 
-    def name(self) -> str:
+    def env_type(self) -> str:
         return "custom"
 
     def bin_paths(self, *paths: str) -> SimpleBuilder:
@@ -646,12 +648,12 @@ class SimpleBuilder(BaseBuilder):
             if java_home_bin.is_dir():
                 # Prepend to beginning of list for highest priority
                 self._custom_bin_paths.insert(0, str(java_home_bin))
-            self.env_vars_dict["JAVA_HOME"] = java_home
+            self._env_vars["JAVA_HOME"] = java_home
         return self
 
     def build(self) -> Environment:
         """Build the simple environment."""
-        base = self._env_dir()
+        base = self._resolve_env_dir()
         if base is None:
             base = Path(".")
 
@@ -685,7 +687,7 @@ class SimpleBuilder(BaseBuilder):
             "Custom environments do not manage packages and cannot be rebuilt."
         )
 
-    def set_name(self, env_name: str) -> SimpleBuilder:
+    def name(self, env_name: str) -> SimpleBuilder:
         """SimpleBuilder does not support named environments."""
         raise NotImplementedError(
             "SimpleBuilder does not support named environments. "
@@ -699,9 +701,9 @@ class SimpleBuilder(BaseBuilder):
             "It uses existing executables without package management."
         )
 
-    def _env_dir(self) -> Path:
+    def _resolve_env_dir(self) -> Path:
         """Override to default to current directory."""
-        return self.env_dir if self.env_dir else Path(".")
+        return self._env_dir if self._env_dir else Path(".")
 
 
 class DynamicBuilder(BaseBuilder):
@@ -712,79 +714,75 @@ class DynamicBuilder(BaseBuilder):
 
     def __init__(self):
         super().__init__()
-        self.builder_name: str | None = None
+        self._env_type: str | None = None
 
-    def builder(self, builder_name: str) -> DynamicBuilder:
+    def builder(self, env_type: str) -> DynamicBuilder:
         """
-        Specifies the preferred builder to use.
+        Specify the preferred builder to use.
 
         Args:
-            builder_name: The builder name (e.g., "pixi", "mamba", "uv")
+            env_type: The builder's environment type (e.g., "pixi", "mamba", "uv")
 
         Returns:
-            This builder instance
+            This builder instance, for fluent-style programming.
         """
-        self.builder_name = builder_name
+        self._env_type = env_type
         return self
 
-    def name(self) -> str:
-        return "dynamic"
+    def env_type(self) -> str:
+        return self._env_type if self._env_type is not None else "dynamic"
 
     def build(self) -> Environment:
         """Build by delegating to the appropriate builder."""
-        delegate = self._create_builder(self.builder_name, self.scheme)
+        delegate = self._create_builder()
         self._copy_config_to_delegate(delegate)
         return delegate.build()
 
     def rebuild(self) -> Environment:
         """Rebuild by delegating to the appropriate builder."""
-        delegate = self._create_builder(self.builder_name, self.scheme)
+        delegate = self._create_builder()
         self._copy_config_to_delegate(delegate)
         return delegate.rebuild()
 
     def _copy_config_to_delegate(self, delegate: Builder) -> None:
         """Copy configuration from dynamic builder to delegate."""
-        delegate.env(**self.env_vars_dict)
-        if self.env_name:
-            delegate.set_name(self.env_name)
-        if self.env_dir:
-            delegate.base(self.env_dir)
-        if self.source_content:
-            delegate.content(self.source_content)
-        if self.scheme:
-            delegate.scheme(self.scheme)
-        delegate.channels(*self.channels_list)
-        delegate.flags(*self.flags_list)
-        for subscriber in self.progress_subscribers:
+        delegate.env(**self._env_vars)
+        if self._env_name:
+            delegate.name(self._env_name)
+        if self._env_dir:
+            delegate.base(self._env_dir)
+        if self._content:
+            delegate.content(self._content)
+        if self._scheme:
+            delegate.scheme(self._scheme.name())
+        delegate.channels(*self._channels)
+        delegate.flags(*self._flags)
+        for subscriber in self._progress_subscribers:
             delegate.subscribe_progress(subscriber)
-        for subscriber in self.output_subscribers:
+        for subscriber in self._output_subscribers:
             delegate.subscribe_output(subscriber)
-        for subscriber in self.error_subscribers:
+        for subscriber in self._error_subscribers:
             delegate.subscribe_error(subscriber)
 
-    def _create_builder(
-        self,
-        name: str | None,
-        scheme: str | None,
-    ) -> Builder:
+    def _create_builder(self) -> Builder:
         """Create the appropriate builder based on name and scheme."""
         # Find the builder matching the specified name, if any
-        if name:
-            factory = find_factory_by_name(name)
+        if self._env_type:
+            factory = find_factory_by_env_type(self._env_type)
             if factory is None:
-                raise ValueError(f"Unknown builder: {name}")
+                raise ValueError(f"Unknown builder: {self._env_type}")
             return factory.create_builder()
 
-        # Detect scheme from content if content is provided but scheme is not
-        effective_scheme = scheme
-        if effective_scheme is None and self.source_content:
-            effective_scheme = self._scheme().name()
+        # Detect scheme from content if content is provided but scheme is not.
+        actual_scheme = self._scheme
+        if actual_scheme is None and self._content:
+            actual_scheme = self._resolve_scheme()
 
-        # Find the highest-priority builder that supports this scheme
-        if effective_scheme:
-            factory = find_factory_by_scheme(effective_scheme)
+        # Find the highest-priority builder that supports this scheme.
+        if actual_scheme is not None:
+            factory = find_factory_by_scheme(actual_scheme.name())
             if factory is None:
-                raise ValueError(f"No builder supports scheme: {effective_scheme}")
+                raise ValueError(f"No builder supports scheme: {actual_scheme.name()}")
             return factory.create_builder()
 
         raise ValueError("Content and/or scheme must be provided for dynamic builder")
@@ -793,26 +791,27 @@ class DynamicBuilder(BaseBuilder):
 _BUILDERS: list[BuilderFactory] | None = None
 
 
-def find_factory_by_name(name: str) -> BuilderFactory | None:
+def find_factory_by_env_type(env_type: str) -> BuilderFactory | None:
     """
-    Finds a factory by name.
+    Find the first factory capable of building a particular type of environment.
+    Factories are checked in priority order.
 
     Args:
-        name: The builder name to search for
+        env_type: The environment type to target.
 
     Returns:
-        The factory with matching name, or None if not found
+        A factory supporting the environment type, or None if not found.
     """
     factories = _discover_factories()
     for factory in factories:
-        if factory.name().lower() == name.lower():
+        if factory.env_type().lower() == env_type.lower():
             return factory
     return None
 
 
 def find_factory_by_scheme(scheme: str) -> BuilderFactory | None:
     """
-    Finds the first factory that supports the given scheme.
+    Find the first factory that supports the given scheme.
     Factories are checked in priority order.
 
     Args:
@@ -830,8 +829,8 @@ def find_factory_by_scheme(scheme: str) -> BuilderFactory | None:
 
 def find_factory_for_wrapping(env_dir: str | Path) -> BuilderFactory | None:
     """
-    Finds the first factory that can wrap the given environment directory.
-    Factories are checked in priority order (highest priority first).
+    Find the first factory that can wrap the given environment directory.
+    Factories are checked in priority order.
 
     Args:
         env_dir: The directory to find a factory for

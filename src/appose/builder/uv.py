@@ -37,6 +37,7 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
+from ..scheme import from_content as scheme_from_content
 from ..tool.uv import Uv
 from ..util.platform import is_windows
 
@@ -50,14 +51,10 @@ class UvBuilder(BaseBuilder):
 
     def __init__(self):
         super().__init__()
-        self.python_version: str | None = None
-        self.packages: list[str] = []
+        self._python_version: str | None = None
+        self._packages: list[str] = []
 
-        # Note: Already assigned in BaseBuilder, but stubgen wants these here, too.
-        self.source_content: str | None = None
-        self.scheme: str | None = None
-
-    def name(self) -> str:
+    def env_type(self) -> str:
         return "uv"
 
     def python(self, version: str) -> UvBuilder:
@@ -70,7 +67,7 @@ class UvBuilder(BaseBuilder):
         Returns:
             This builder instance
         """
-        self.python_version = version
+        self._python_version = version
         return self
 
     def include(self, *packages: str) -> UvBuilder:
@@ -83,7 +80,7 @@ class UvBuilder(BaseBuilder):
         Returns:
             This builder instance
         """
-        self.packages.extend(packages)
+        self._packages.extend(packages)
         return self
 
     def channels(self, *indexes: str) -> UvBuilder:
@@ -110,7 +107,7 @@ class UvBuilder(BaseBuilder):
         Raises:
             BuildException: If the build fails
         """
-        env_dir = self._env_dir()
+        env_dir = self._resolve_env_dir()
 
         # Check for incompatible existing environments
         if (env_dir / ".pixi").is_dir():
@@ -128,21 +125,21 @@ class UvBuilder(BaseBuilder):
 
         # Set up progress/output consumers
         uv.set_output_consumer(
-            lambda msg: [sub(msg) for sub in self.output_subscribers]
+            lambda msg: [sub(msg) for sub in self._output_subscribers]
         )
-        uv.set_error_consumer(lambda msg: [sub(msg) for sub in self.error_subscribers])
+        uv.set_error_consumer(lambda msg: [sub(msg) for sub in self._error_subscribers])
         uv.set_download_progress_consumer(
             lambda cur, max: [
-                sub("Downloading uv", cur, max) for sub in self.progress_subscribers
+                sub("Downloading uv", cur, max) for sub in self._progress_subscribers
             ]
         )
 
         # Pass along intended build configuration
-        uv.set_env_vars(self.env_vars_dict)
-        uv.set_flags(self.flags_list)
+        uv.set_env_vars(self._env_vars)
+        uv.set_flags(self._flags)
 
         # Check for unsupported features
-        if self.channels_list:
+        if self._channels:
             raise BuildException(
                 self,
                 "UvBuilder does not yet support programmatic index configuration. "
@@ -156,23 +153,23 @@ class UvBuilder(BaseBuilder):
             # Check if this is already a uv virtual environment
             is_uv_venv = (env_dir / "pyvenv.cfg").is_file()
 
-            if is_uv_venv and self.source_content is None and not self.packages:
+            if is_uv_venv and self._content is None and not self._packages:
                 # Environment already exists and no new config/packages, just use it
                 return self._create_environment(env_dir)
 
             # Handle source-based build (file or content)
-            if self.source_content is not None:
+            if self._content is not None:
                 # Infer scheme if not explicitly set
-                if self.scheme is None:
-                    self.scheme = self._scheme().name()
+                if self._scheme is None:
+                    self._scheme = scheme_from_content(self._content)
 
-                if self.scheme not in ["requirements.txt", "pyproject.toml"]:
+                if self._scheme.name() not in ["requirements.txt", "pyproject.toml"]:
                     raise BuildException(
                         self,
-                        f"UvBuilder only supports requirements.txt and pyproject.toml schemes, got: {self.scheme}",
+                        f"UvBuilder only supports requirements.txt and pyproject.toml schemes, got: {self._scheme.name()}",
                     )
 
-                if self.scheme == "pyproject.toml":
+                if self._scheme.name() == "pyproject.toml":
                     # Handle pyproject.toml - uses uv sync
                     # Create envDir if it doesn't exist
                     if not env_dir.exists():
@@ -180,19 +177,19 @@ class UvBuilder(BaseBuilder):
 
                     # Write pyproject.toml to envDir
                     pyproject_file = env_dir / "pyproject.toml"
-                    pyproject_file.write_text(self.source_content, encoding="utf-8")
+                    pyproject_file.write_text(self._content, encoding="utf-8")
 
                     # Run uv sync to create .venv and install dependencies
-                    uv.sync(env_dir, self.python_version)
+                    uv.sync(env_dir, self._python_version)
                 else:
                     # Handle requirements.txt - traditional venv + pip install
                     # Create virtual environment if it doesn't exist
                     if not is_uv_venv:
-                        uv.create_venv(env_dir, self.python_version)
+                        uv.create_venv(env_dir, self._python_version)
 
                     # Write requirements.txt to envDir
                     reqs_file = env_dir / "requirements.txt"
-                    reqs_file.write_text(self.source_content, encoding="utf-8")
+                    reqs_file.write_text(self._content, encoding="utf-8")
 
                     # Install packages from requirements.txt
                     uv.pip_install_from_requirements(env_dir, str(reqs_file.absolute()))
@@ -200,11 +197,11 @@ class UvBuilder(BaseBuilder):
                 # Programmatic package building
                 if not is_uv_venv:
                     # Create virtual environment
-                    uv.create_venv(env_dir, self.python_version)
+                    uv.create_venv(env_dir, self._python_version)
 
                 # Install packages
-                if self.packages:
-                    all_packages = list(self.packages)
+                if self._packages:
+                    all_packages = list(self._packages)
                     # Always include appose if we're installing packages
                     if "appose" not in all_packages:
                         all_packages.append("appose")
@@ -237,16 +234,16 @@ class UvBuilder(BaseBuilder):
         if pyproject_toml.exists() and pyproject_toml.is_file():
             # Read the content so rebuild() will work even after directory is deleted
             with open(pyproject_toml, "r", encoding="utf-8") as f:
-                self.source_content = f.read()
-            self.scheme = "pyproject.toml"
+                self._content = f.read()
+            self._scheme = scheme_from_content("pyproject.toml")
         else:
             # Fall back to requirements.txt
             requirements_txt = env_path / "requirements.txt"
             if requirements_txt.exists() and requirements_txt.is_file():
                 # Read the content so rebuild() will work even after directory is deleted
                 with open(requirements_txt, "r", encoding="utf-8") as f:
-                    self.source_content = f.read()
-                self.scheme = "requirements.txt"
+                    self._content = f.read()
+                self._scheme = scheme_from_content("requirements.txt")
 
         # Set the base directory and build (which will detect existing env)
         self.base(env_path)
@@ -296,7 +293,7 @@ class UvBuilderFactory(BuilderFactory):
         """
         return UvBuilder()
 
-    def name(self) -> str:
+    def env_type(self) -> str:
         return "uv"
 
     def supports_scheme(self, scheme: str) -> bool:
