@@ -37,7 +37,7 @@ import re
 from math import ceil, prod
 from multiprocessing import resource_tracker, shared_memory
 
-from .util import types
+from .util import message
 
 
 class SharedMemory(shared_memory.SharedMemory):
@@ -66,7 +66,7 @@ class SharedMemory(shared_memory.SharedMemory):
         super().__init__(name=name, create=create, size=rsize)
         self.rsize: int = rsize
         self._unlink_on_dispose: bool = create
-        if types._worker_mode:
+        if message._worker_mode:
             # HACK: Remove this shared memory block from the resource_tracker,
             # which would otherwise want to clean up shared memory blocks
             # after all known references are done using them.

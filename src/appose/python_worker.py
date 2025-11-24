@@ -50,8 +50,8 @@ from typing import Any
 
 # NB: Avoid relative imports so that this script can be run standalone.
 from appose.service import RequestType, ResponseType
-from appose.util import types
-from appose.util.types import Args, decode, encode
+from appose.util import message
+from appose.util.message import Args
 
 
 class Task:
@@ -181,7 +181,7 @@ class Task:
         response.update({"task": self._uuid, "responseType": response_type.value})
         # NB: Flush is necessary to ensure service receives the data!
         try:
-            print(encode(response), flush=True)
+            print(message.encode(response), flush=True)
         except BaseException:
             if already_terminated:
                 # An exception triggered a failure response which
@@ -201,7 +201,7 @@ class Worker:
         self.exports: dict[str, Any] = {}
 
         # Flag this process as a worker, not a service.
-        types._worker_mode = True
+        message._worker_mode = True
 
     def run(self) -> None:
         """
@@ -229,7 +229,7 @@ class Worker:
                 self.running = False
                 return
 
-            request = decode(line)
+            request = message.decode(line)
             uuid = request.get("task")
             request_type = RequestType(request.get("requestType"))
 

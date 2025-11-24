@@ -28,7 +28,7 @@
 ###
 
 """
-TODO
+Utility functions for encoding and decoding messages.
 """
 
 from __future__ import annotations

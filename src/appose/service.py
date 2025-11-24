@@ -42,7 +42,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from .syntax import ScriptSyntax, get as syntax_from_name
-from .util.types import Args, decode, encode
+from .util.message import Args, decode, encode
 
 
 class TaskException(Exception):
