@@ -149,7 +149,7 @@ class Builder(ABC):
         ...
 
     @abstractmethod
-    def env(self, **vars: dict[str, str]) -> Builder:
+    def env(self, **vars: str) -> Builder:
         """
         Set environment variables to be passed to worker processes.
 
