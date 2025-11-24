@@ -159,15 +159,11 @@ class PixiBuilder(BaseBuilder):
                 elif self._scheme.name() == "pyproject.toml":
                     # Write pyproject.toml to envDir (Pixi natively supports it)
                     pyproject_toml_file = env_dir / "pyproject.toml"
-                    pyproject_toml_file.write_text(
-                        self._content, encoding="utf-8"
-                    )
+                    pyproject_toml_file.write_text(self._content, encoding="utf-8")
                 elif self._scheme.name() == "environment.yml":
                     # Write environment.yml and import
                     environment_yaml_file = env_dir / "environment.yml"
-                    environment_yaml_file.write_text(
-                        self._content, encoding="utf-8"
-                    )
+                    environment_yaml_file.write_text(self._content, encoding="utf-8")
                     # Only run init --import if pixi.toml doesn't exist yet
                     # (importing creates pixi.toml, so this avoids "pixi.toml already exists" error)
                     if not (env_dir / "pixi.toml").exists():

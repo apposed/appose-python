@@ -68,9 +68,7 @@ class Service:
 
     _service_count: int = 0
 
-    def __init__(
-        self, cwd: str | Path, args: list[str]
-    ) -> None:
+    def __init__(self, cwd: str | Path, args: list[str]) -> None:
         self._cwd: Path = Path(cwd)
         self._args: list[str] = args[:]
         self._tasks: dict[str, "Task"] = {}
@@ -153,12 +151,14 @@ class Service:
         Environment.groovy() when creating services of those types.
         It can also be called manually to support custom languages with
         registered ScriptSyntax plugins.
-        
+
         :param syntax: The type identifier (e.g., "python", "groovy").
         :return: This service object, for chaining method calls.
         :raises: ValueError If no syntax plugin is found for the given type.
         """
-        self._syntax = syntax if isinstance(syntax, ScriptSyntax) else syntax_from_name(syntax)
+        self._syntax = (
+            syntax if isinstance(syntax, ScriptSyntax) else syntax_from_name(syntax)
+        )
         return self
 
     def get_var(self, name: str) -> Any:

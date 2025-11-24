@@ -395,10 +395,10 @@ class BuilderFactory(ABC):
     @abstractmethod
     def env_type(self) -> str:
         """
-	    Get the environment type handled by this builder (e.g., "pixi", "mamba", "uv").
+            Get the environment type handled by this builder (e.g., "pixi", "mamba", "uv").
 
         Returns:
-	        The builder's associated environment type.
+                The builder's associated environment type.
         """
         ...
 
@@ -501,7 +501,9 @@ class BaseBuilder(Builder):
 
     def scheme(self, scheme: str | Scheme) -> BaseBuilder:
         """Set the explicit scheme."""
-        self._scheme = scheme if isinstance(scheme, Scheme) else scheme_from_name(scheme)
+        self._scheme = (
+            scheme if isinstance(scheme, Scheme) else scheme_from_name(scheme)
+        )
         return self
 
     def subscribe_progress(self, subscriber: ProgressConsumer) -> BaseBuilder:
@@ -533,9 +535,11 @@ class BaseBuilder(Builder):
 
         # No explicit environment directory set; fall back to
         # a subfolder of the Appose-managed environments directory.
-        dir_name = self._env_name if self._env_name is not None else (
+        dir_name = (
+            self._env_name
+            if self._env_name is not None
             # No explicit environment name set; extract name from the source content.
-            self._resolve_scheme().env_name(self._content)
+            else (self._resolve_scheme().env_name(self._content))
         )
 
         return Path(appose_envs_dir()) / dir_name
@@ -565,6 +569,7 @@ class BaseBuilder(Builder):
 
         class BuiltEnvironment(Environment):
             """A simple Environment implementation."""
+
             def __init__(
                 self,
                 base_path: str,

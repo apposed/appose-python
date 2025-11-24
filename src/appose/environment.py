@@ -131,7 +131,7 @@ class Environment:
         return self.service(
             python_exes,
             "-c",
-            "import appose.python_worker; appose.python_worker.main()"
+            "import appose.python_worker; appose.python_worker.main()",
         ).syntax(PythonSyntax())
 
     def groovy(
@@ -160,9 +160,7 @@ class Environment:
         :raises IOError: If something goes wrong starting the worker process.
         """
         return self.java(
-            "org.apposed.appose.GroovyWorker",
-            class_path=class_path,
-            jvm_args=jvm_args
+            "org.apposed.appose.GroovyWorker", class_path=class_path, jvm_args=jvm_args
         ).syntax(GroovySyntax())
 
     def java(
