@@ -65,7 +65,7 @@ if TYPE_CHECKING:
 
 def create(service: Service, var: str, queue: str | None = None) -> Any:
     """
-    Creates a proxy object providing typed access to a remote object in a worker process.
+    Create a proxy object providing typed access to a remote object in a worker process.
 
     Each method invocation on the returned proxy generates a script of the form
     var.methodName(arg0, arg1, ...) and submits it as a task to the worker.

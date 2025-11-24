@@ -236,7 +236,7 @@ from ._version import __version__  # noqa: F401
 
 def pixi(source: str | Path | None = None) -> PixiBuilder:
     """
-    Creates a PixiBuilder for Pixi-based environments.
+    Create a PixiBuilder for Pixi-based environments.
 
     Args:
         source: Optional configuration source (file path or URL)
@@ -255,7 +255,7 @@ def pixi(source: str | Path | None = None) -> PixiBuilder:
 
 def mamba(source: str | Path | None = None) -> MambaBuilder:
     """
-    Creates a MambaBuilder for Micromamba-based environments.
+    Create a MambaBuilder for Micromamba-based environments.
 
     Args:
         source: Optional configuration source (file path or URL)
@@ -274,7 +274,7 @@ def mamba(source: str | Path | None = None) -> MambaBuilder:
 
 def uv(source: str | Path | None = None) -> UvBuilder:
     """
-    Creates a UvBuilder for uv-based virtual environments.
+    Create a UvBuilder for uv-based virtual environments.
 
     Args:
         source: Optional configuration source (file path or URL)
@@ -293,7 +293,8 @@ def uv(source: str | Path | None = None) -> UvBuilder:
 
 def file(source: str | Path) -> DynamicBuilder:
     """
-    Creates a DynamicBuilder from a configuration file.
+    Create a DynamicBuilder from a configuration file.
+
     The builder type will be auto-detected from file content.
 
     Args:
@@ -307,7 +308,8 @@ def file(source: str | Path) -> DynamicBuilder:
 
 def url(source: str) -> DynamicBuilder:
     """
-    Creates a DynamicBuilder from a URL.
+    Create a DynamicBuilder from a URL.
+
     The builder type will be auto-detected from content.
 
     Args:
@@ -321,7 +323,8 @@ def url(source: str) -> DynamicBuilder:
 
 def content(content: str) -> DynamicBuilder:
     """
-    Creates a DynamicBuilder from configuration content.
+    Create a DynamicBuilder from configuration content.
+
     The builder type will be auto-detected from content syntax.
 
     Args:
@@ -335,7 +338,7 @@ def content(content: str) -> DynamicBuilder:
 
 def wrap(env_dir: str | Path) -> Environment:
     """
-    Wraps an existing environment directory, auto-detecting its type.
+    Wrap an existing environment directory, auto-detecting its type.
 
     Args:
         env_dir: The directory containing the environment
@@ -362,7 +365,7 @@ def wrap(env_dir: str | Path) -> Environment:
 
 def system(directory: str | Path = Path(".")) -> Environment:
     """
-    Creates a simple environment using system executables.
+    Create a simple environment using system executables.
 
     Args:
         directory: The working directory (defaults to current directory)
@@ -375,7 +378,7 @@ def system(directory: str | Path = Path(".")) -> Environment:
 
 def custom() -> SimpleBuilder:
     """
-    Creates a SimpleBuilder for custom environments without package management.
+    Create a SimpleBuilder for custom environments without package management.
 
     Returns:
         A SimpleBuilder instance

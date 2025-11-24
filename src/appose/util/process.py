@@ -46,7 +46,7 @@ def builder(
     *command: str,
 ) -> subprocess.Popen:
     """
-    Creates a subprocess.Popen object with environment variables applied.
+    Create a subprocess.Popen object with environment variables applied.
 
     Args:
         working_dir: Working directory for the process (can be None).

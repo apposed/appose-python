@@ -125,7 +125,7 @@ def is_executable(file: Path) -> bool:
 
 def base_command() -> list[str]:
     """
-    Gets the arguments to prefix to execute a command in a separate process.
+    Get the arguments to prefix to execute a command in a separate process.
 
     Returns:
         ['cmd.exe', '/c'] for Windows and an empty list otherwise.

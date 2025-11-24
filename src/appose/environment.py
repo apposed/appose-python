@@ -52,7 +52,7 @@ class Environment:
 
     def base(self) -> str:
         """
-        Returns the base directory of this environment.
+        Return the base directory of this environment.
 
         Returns:
             The absolute path to the base directory
@@ -61,7 +61,7 @@ class Environment:
 
     def bin_paths(self) -> list[str]:
         """
-        Returns the list of binary directories to search for executables.
+        Return the list of binary directories to search for executables.
 
         Returns:
             List of binary directory paths
@@ -71,7 +71,7 @@ class Environment:
 
     def launch_args(self) -> list[str]:
         """
-        Returns the launch arguments to prepend when starting worker processes.
+        Return the launch arguments to prepend when starting worker processes.
 
         Returns:
             List of launch arguments
@@ -81,7 +81,7 @@ class Environment:
 
     def env_vars(self) -> dict[str, str]:
         """
-        Returns environment variables to set when launching worker processes.
+        Return environment variables to set when launching worker processes.
 
         Returns:
             Dictionary of environment variable names to values
@@ -117,9 +117,14 @@ class Environment:
         Python scripts asynchronously on its linked process running a
         `python_worker`.
 
-        :return: The newly created service.
-        :see: groovy() To create a service for Groovy script execution.
-        :raises IOError: If something goes wrong starting the worker process.
+        Returns:
+            The newly created service.
+
+        Raises:
+            IOError: If something goes wrong starting the worker process.
+
+        See Also:
+            groovy(): To create a service for Groovy script execution.
         """
         python_exes = [
             "python",
@@ -140,24 +145,30 @@ class Environment:
         jvm_args: list[str] | None = None,
     ) -> Service:
         """
-        Create a Groovy script service. Groovy (https://groovy-lang.org/)
-        is a script language for the JVM, capable of running Java bytecode
-        conveniently and succinctly, as well as downloading and importing
-        dependencies dynamically at runtime using its Grape subsystem
-        (https://groovy-lang.org/Grape).
+        Create a Groovy script service.
+
+        Groovy (https://groovy-lang.org/) is a script language for the JVM,
+        capable of running Java bytecode conveniently and succinctly, as well
+        as downloading and importing dependencies dynamically at runtime using
+        its Grape subsystem (https://groovy-lang.org/Grape).
 
         This is a *high level* way to create a service, enabling execution of
         Groovy scripts asynchronously on its linked process running a
         `GroovyWorker`.
 
-        :param class_path:
-            Additional classpath elements to pass to the JVM
-            via its `-cp` command line option.
-        :param jvm_args:
-            Command line arguments to pass to the JVM invocation (e.g. `-Xmx4g`).
-        :return: The newly created service.
-        :see: python() To create a service for Python script execution.
-        :raises IOError: If something goes wrong starting the worker process.
+        Args:
+            class_path: Additional classpath elements to pass to the JVM
+                via its `-cp` command line option.
+            jvm_args: Command line arguments to pass to the JVM invocation (e.g. `-Xmx4g`).
+
+        Returns:
+            The newly created service.
+
+        Raises:
+            IOError: If something goes wrong starting the worker process.
+
+        See Also:
+            python(): To create a service for Python script execution.
         """
         return self.java(
             "org.apposed.appose.GroovyWorker", class_path=class_path, jvm_args=jvm_args
@@ -208,14 +219,17 @@ class Environment:
         meaning it accepts requests on stdin and produces responses on
         stdout, both formatted according to Appose's assumptions.
 
-        :param exes:
-            List of executables to try for launching the worker process.
-        :param args:
-            Command line arguments to pass to the worker process
-            (e.g. ["-v", "--enable-everything"]).
-        :return: The newly created service.
-        :see: groovy() To create a service for Groovy script execution.
-        :see: python() To create a service for Python script execution.
+        Args:
+            exes: List of executables to try for launching the worker process.
+            args: Command line arguments to pass to the worker process
+                (e.g. ["-v", "--enable-everything"]).
+
+        Returns:
+            The newly created service.
+
+        See Also:
+            groovy(): To create a service for Groovy script execution.
+            python(): To create a service for Python script execution.
         """
         if not exes:
             raise ValueError("No executable given")

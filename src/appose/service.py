@@ -82,11 +82,11 @@ class Service:
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
         """
-        Register a callback function to receive messages
-        describing current service/worker activity.
+        Register a callback function to receive messages describing current
+        service/worker activity.
 
-        :param debug_callback:
-            A function that accepts a single string argument.
+        Args:
+            debug_callback: A function that accepts a single string argument.
         """
         self._debug_callback = debug_callback
 
@@ -130,21 +130,20 @@ class Service:
     ) -> "Task":
         """
         Create a new task, passing the given script to the worker for execution.
-        :param script:
-            The script for the worker to execute in its environment.
-        :param inputs:
-            Optional list of key/value pairs to feed into the script as inputs.
-        :param queue:
-            Optional queue target. Pass "main" to queue to worker's main thread.
+
+        Args:
+            script: The script for the worker to execute in its environment.
+            inputs: Optional list of key/value pairs to feed into the script as inputs.
+            queue: Optional queue target. Pass "main" to queue to worker's main thread.
         """
         self.start()
         return Task(self, script, inputs, queue)
 
     def syntax(self, syntax: str | ScriptSyntax) -> Service:
         """
-        Declares the script syntax of this service.
+        Declare the script syntax of this service.
 
-        This value determines which {@link ScriptSyntax} implementation is used
+        This value determines which ScriptSyntax implementation is used
         for generating language-specific scripts.
 
         This method is called directly by Environment.python() and
@@ -152,9 +151,14 @@ class Service:
         It can also be called manually to support custom languages with
         registered ScriptSyntax plugins.
 
-        :param syntax: The type identifier (e.g., "python", "groovy").
-        :return: This service object, for chaining method calls.
-        :raises: ValueError If no syntax plugin is found for the given type.
+        Args:
+            syntax: The type identifier (e.g., "python", "groovy").
+
+        Returns:
+            This service object, for chaining method calls.
+
+        Raises:
+            ValueError: If no syntax plugin is found for the given type.
         """
         self._syntax = (
             syntax if isinstance(syntax, ScriptSyntax) else syntax_from_name(syntax)
@@ -163,7 +167,7 @@ class Service:
 
     def get_var(self, name: str) -> Any:
         """
-        Retrieves a variable's value from the worker process's global scope.
+        Retrieve a variable's value from the worker process's global scope.
 
         The variable must have been previously exported using task.export()
         to be accessible across tasks.
@@ -186,7 +190,7 @@ class Service:
 
     def put_var(self, name: str, value: Any) -> None:
         """
-        Sets a variable in the worker process's global scope and exports it
+        Set a variable in the worker process's global scope and export it
         for future use across tasks.
 
         Args:
@@ -205,8 +209,8 @@ class Service:
 
     def call(self, function: str, *args: Any) -> Any:
         """
-        Calls a function in the worker process with the given arguments and
-        returns the result.
+        Call a function in the worker process with the given arguments and
+        return the result.
 
         The function must be accessible in the worker's global scope (either
         built-in or previously defined/imported).
@@ -236,7 +240,7 @@ class Service:
 
     def proxy(self, var: str, api: type, queue: str | None = None) -> Any:
         """
-        Creates a proxy object providing strongly typed access to a remote
+        Create a proxy object providing strongly typed access to a remote
         object in this service's worker process.
 
         Method calls on the proxy are transparently forwarded to the remote
@@ -518,7 +522,7 @@ class Task:
 
     def result(self) -> Any:
         """
-        Returns the result of this task.
+        Return the result of this task.
 
         This is a convenience method that returns outputs["result"].
         For tasks that return a single value (e.g., from an expression),

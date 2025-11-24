@@ -12,7 +12,8 @@ import os
 
 def env_vars(*keys: str) -> dict[str, str]:
     """
-    Retrieves the specified environment variables from the current process.
+    Retrieve the specified environment variables from the current process.
+
     Only variables that are set will be included in the returned map.
 
     Args:
@@ -32,7 +33,7 @@ def env_vars(*keys: str) -> dict[str, str]:
 
 def system_path() -> list[str]:
     """
-    Returns the current process's system PATH as a list of directory paths.
+    Return the current process's system PATH as a list of directory paths.
 
     This splits the PATH environment variable on the platform-specific separator
     (colon on Unix-like systems, semicolon on Windows).

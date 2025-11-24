@@ -16,7 +16,7 @@ from . import platform
 
 def location(c: type) -> Path | None:
     """
-    Gets the path to the module file containing the given class/type.
+    Get the path to the module file containing the given class/type.
 
     Args:
         c: The class/type whose file path should be discerned.
@@ -239,7 +239,8 @@ def ensure_directory(file: Path) -> None:
 
 def appose_envs_dir() -> str:
     """
-    Gets the top-level directory for Appose-managed environments.
+    Get the top-level directory for Appose-managed environments.
+
     Defaults to ~/.local/share/appose but can be overridden by setting
     the APPOSE_ENVS_DIR environment variable.
 

@@ -53,17 +53,15 @@ class SharedMemory(shared_memory.SharedMemory):
         """
         Create a new shared memory block, or attach to an existing one.
 
-        :param name:
-            The unique name for the requested shared memory, specified as a
-            string. If create is True (i.e. a new shared memory block) and
-            no name is given, a novel name will be generated.
-        :param create:
-            Whether a new shared memory block is created (True)
-            or an existing one is attached to (False).
-        :param rsize:
-            Requested size in bytes. The true allocated size will be at least
-            this much, but may be rounded up to the next block size multiple,
-            depending on the running platform.
+        Args:
+            name: The unique name for the requested shared memory, specified as a
+                string. If create is True (i.e. a new shared memory block) and
+                no name is given, a novel name will be generated.
+            create: Whether a new shared memory block is created (True)
+                or an existing one is attached to (False).
+            rsize: Requested size in bytes. The true allocated size will be at least
+                this much, but may be rounded up to the next block size multiple,
+                depending on the running platform.
         """
         super().__init__(name=name, create=create, size=rsize)
         self.rsize: int = rsize
@@ -149,10 +147,12 @@ class NDArray:
     def __init__(self, dtype: str, shape: list[int], shm: SharedMemory | None = None):
         """
         Create an NDArray.
-        :param dtype: The type of the data elements; e.g. int8, uint8, float32, float64.
-        :param shape: The dimensional extents; e.g. a stack of 7 image planes
-                      with resolution 512x512 would have shape [7, 512, 512].
-        :param shm: The SharedMemory containing the array data, or None to create it.
+
+        Args:
+            dtype: The type of the data elements; e.g. int8, uint8, float32, float64.
+            shape: The dimensional extents; e.g. a stack of 7 image planes
+                with resolution 512x512 would have shape [7, 512, 512].
+            shm: The SharedMemory containing the array data, or None to create it.
         """
         self.dtype: str = dtype
         self.shape: list[int] = shape
