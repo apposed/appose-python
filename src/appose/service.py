@@ -9,6 +9,7 @@ The appose.service package contains classes for services and tasks.
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import threading
 from enum import Enum
 from pathlib import Path
@@ -58,6 +59,7 @@ class Service:
         self._stderr_thread: threading.Thread | None = None
         self._monitor_thread: threading.Thread | None = None
         self._debug_callback: Callable[[Any], Any] | None = None
+        self._init_script: str | None = None
         self._syntax: ScriptSyntax | None = None
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
@@ -69,6 +71,32 @@ class Service:
             debug_callback: A function that accepts a single string argument.
         """
         self._debug_callback = debug_callback
+
+    def init(self, script: str) -> "Service":
+        """
+        Register a script to be executed when the worker process first starts up,
+        before any tasks are processed. This is useful for early initialization that
+        must happen before the worker's main loop begins, such as importing libraries
+        that may interfere with I/O operations.
+
+        Example: On Windows, importing numpy can hang when stdin is open for reading
+        (described at https://github.com/numpy/numpy/issues/24290).
+        Using service.init("import numpy") works around this by importing
+        numpy before the worker's I/O loop starts.
+
+        Args:
+            script: The script code to execute during worker initialization.
+
+        Returns:
+            This service object, for chaining method calls.
+
+        Raises:
+            RuntimeError: If the service has already started.
+        """
+        if self._process is not None:
+            raise RuntimeError("Service already started")
+        self._init_script = script
+        return self
 
     def start(self) -> None:
         """
@@ -85,6 +113,19 @@ class Service:
             return
 
         prefix = f"Appose-Service-{self._service_id}"
+
+        # If an init script is provided, write it to a temporary file
+        # and pass its path via environment variable.
+        if self._init_script:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                prefix="appose-init-",
+                suffix=".txt",
+                delete=False,
+            ) as init_file:
+                init_file.write(self._init_script)
+                self._env_vars["APPOSE_INIT_SCRIPT"] = init_file.name
 
         self._process = process.builder(self._cwd, self._env_vars, *self._args)
         self._stdout_thread = threading.Thread(

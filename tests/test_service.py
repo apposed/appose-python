@@ -131,3 +131,62 @@ def test_main_thread_queue_python():
         assert TaskStatus.COMPLETE == task.status
         thread = task.outputs.get("thread")
         assert thread != "MainThread"
+
+
+def test_init():
+    """Tests that init script is executed before tasks run."""
+    env = appose.system()
+    with env.python().init("init_value = 'initialized'") as service:
+        maybe_debug(service)
+
+        # Verify that the init script was executed and the variable is accessible.
+        task = service.task("init_value").wait_for()
+        assert TaskStatus.COMPLETE == task.status
+
+        result = task.result()
+        assert result == "initialized", "Init script should set init_value variable"
+
+
+def test_init_numpy():
+    """Tests that NumPy works on every platform, even Windows."""
+    env = (
+        appose.pixi()
+        .base("target/envs/test-init-numpy")
+        .conda("numpy=2.3.4")
+        .pypi("appose==0.7.2")
+        .log_debug()
+        .build()
+    )
+    with env.python().init("import numpy") as service:
+        maybe_debug(service)
+
+        task = service.task(
+            "import numpy\n"
+            "narr = numpy.random.default_rng(seed=1337).random([3, 5])\n"
+            "[float(v) for v in narr.flatten()]"
+        ).wait_for()
+        assert TaskStatus.COMPLETE == task.status
+
+        result = task.outputs.get("result")
+        assert isinstance(result, list)
+        expected = [
+            0.8781019003,
+            0.1855279616,
+            0.9209004548,
+            0.9465658637,
+            0.8745080903,
+            0.1157427629,
+            0.1937316623,
+            0.3417371975,
+            0.4957909002,
+            0.8983712328,
+            0.0064586191,
+            0.2274114670,
+            0.7936549524,
+            0.4142867178,
+            0.0838144031,
+        ]
+        for i, expected_val in enumerate(expected):
+            actual_val = result[i]
+            assert isinstance(actual_val, (int, float))
+            assert abs(actual_val - expected_val) < 1e-10
