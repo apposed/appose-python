@@ -28,9 +28,6 @@ class PixiBuilder(BaseBuilder):
         self._conda_packages: list[str] = []
         self._pypi_packages: list[str] = []
 
-    def env_type(self) -> str:
-        return "pixi"
-
     def conda(self, *packages: str) -> PixiBuilder:
         """
         Add conda packages to the environment.
@@ -56,6 +53,9 @@ class PixiBuilder(BaseBuilder):
         """
         self._pypi_packages.extend(packages)
         return self
+
+    def env_type(self) -> str:
+        return "pixi"
 
     def build(self) -> Environment:
         """
