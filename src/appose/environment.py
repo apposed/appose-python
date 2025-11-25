@@ -271,4 +271,4 @@ class Environment:
         all_args.append(exe_path)
         all_args.extend(args)
 
-        return Service(self.base(), all_args)
+        return Service(self.base(), self.env_vars(), *all_args)

@@ -29,7 +29,7 @@ def builder(
         command: Command and arguments to execute.
 
     Returns:
-        Configured Popen object ready to start.
+        Configured Popen object with stdin, stdout, and stderr piped.
     """
     env = os.environ.copy()
     if env_vars:
@@ -41,6 +41,7 @@ def builder(
         command,
         cwd=cwd,
         env=env,
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

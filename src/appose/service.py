@@ -17,6 +17,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from .syntax import ScriptSyntax, get as syntax_from_name
+from .util import process
 from .util.message import Args, decode, encode
 
 
@@ -43,9 +44,12 @@ class Service:
 
     _service_count: int = 0
 
-    def __init__(self, cwd: str | Path, args: list[str]) -> None:
+    def __init__(
+        self, cwd: str | Path, env_vars: dict[str, str] | None = None, *args: str
+    ) -> None:
         self._cwd: Path = Path(cwd)
-        self._args: list[str] = args[:]
+        self._env_vars: dict[str, str] = env_vars.copy() if env_vars is not None else {}
+        self._args: list[str] = list(args)
         self._tasks: dict[str, "Task"] = {}
         self._service_id: int = Service._service_count
         Service._service_count += 1
@@ -54,6 +58,7 @@ class Service:
         self._stderr_thread: threading.Thread | None = None
         self._monitor_thread: threading.Thread | None = None
         self._debug_callback: Callable[[Any], Any] | None = None
+        self._syntax: ScriptSyntax | None = None
 
     def debug(self, debug_callback: Callable[[Any], Any]) -> None:
         """
@@ -80,13 +85,8 @@ class Service:
             return
 
         prefix = f"Appose-Service-{self._service_id}"
-        self._process = subprocess.Popen(
-            self._args,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            cwd=self._cwd,
-            text=True,
-        )
+
+        self._process = process.builder(self._cwd, self._env_vars, *self._args)
         self._stdout_thread = threading.Thread(
             target=self._stdout_loop, name=f"{prefix}-Stdout"
         )
