@@ -12,9 +12,9 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .service import Service
 from .syntax import GroovySyntax, PythonSyntax
 from .util.filepath import find_exe
-from .service import Service
 
 if TYPE_CHECKING:
     from .builder import Builder
@@ -83,6 +83,31 @@ class Environment:
         """
         builder = self.builder()
         return builder.env_type() if builder else "unknown"
+
+    def rebuild(self) -> Environment:
+        """
+        Rebuilds this environment from scratch.
+        This deletes the existing environment directory and rebuilds it using the
+        current builder configuration.
+
+        Returns:
+            The newly rebuilt environment.
+        Raises:
+            BuildException: If something goes wrong during rebuild.
+        """
+        return self.builder().rebuild()
+
+    def delete(self) -> Environment:
+        """
+        Deletes the existing environment directory, if any.
+
+        Returns:
+            This environment, for fluid chaining.
+        Raises:
+            OSError: If something goes wrong during deletion.
+        """
+        self.builder().delete()
+        return self
 
     def python(self) -> Service:
         """
