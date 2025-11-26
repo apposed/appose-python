@@ -119,14 +119,6 @@ def test_call_nonexistent_function():
         assert "failed" in str(exc_info.value).lower()
 
 
-class Creature(Protocol):
-    """Test protocol for proxy testing."""
-
-    def walk(self, speed: int) -> str: ...
-    def fly(self, speed: int, height: int) -> bool: ...
-    def dive(self, depth: float) -> str: ...
-
-
 def test_proxy():
     """Test Service.proxy functionality."""
     env = appose.system()
@@ -163,7 +155,7 @@ task.export(bird=Bird(), fish=Fish())
         assert_complete(setup)
 
         # Validate bird behavior
-        bird = service.proxy("bird", Creature)
+        bird = service.proxy("bird")
         assert bird.walk(1) == "Hopped at rate: 1"
         assert bird.walk(2) == "Too fast for birds!"
         assert bird.fly(5, 100) is True
@@ -173,7 +165,7 @@ task.export(bird=Bird(), fish=Fish())
         assert bird.dive(3) == "Too deep for birds!"
 
         # Validate fish behavior
-        fish = service.proxy("fish", Creature)
+        fish = service.proxy("fish")
         assert fish.walk(1) == "Nope! Only the Darwin fish can do that."
         assert fish.fly(2, 4) is True
         assert fish.fly(2, 10) is False

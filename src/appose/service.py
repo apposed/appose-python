@@ -262,10 +262,10 @@ class Service:
         task = self.task(script, inputs).wait_for()
         return task.outputs.get("result")
 
-    def proxy(self, var: str, api: type, queue: str | None = None) -> Any:
+    def proxy(self, var: str, queue: str | None = None) -> Any:
         """
-        Create a proxy object providing strongly typed access to a remote
-        object in this service's worker process.
+        Create a proxy object providing access to a remote object in this
+        service's worker process.
 
         Method calls on the proxy are transparently forwarded to the remote
         object via Tasks.
@@ -277,7 +277,6 @@ class Service:
         Args:
             var: The name of the exported variable in the worker process
                  referencing the remote object.
-            api: The interface/protocol class that the proxy should implement.
             queue: Optional queue identifier for task execution. Pass "main" to
                    ensure execution on the worker's main thread.
 
