@@ -271,6 +271,39 @@ def main() -> None:
         except BaseException as e:
             print(f"[WARNING] Init script failed: {e}", file=sys.stderr)
 
+    # On Windows, we must import numpy here on the main thread before opening stdin.
+    # Otherwise, the import will hang, even if run as part of a task with queue="main".
+    # See: https://github.com/numpy/numpy/issues/24290.
+    # The best way to do that is by creating the Python service like:
+    #
+    #     env.python().init("import numpy")
+    #
+    # or similar `init` script invocation.
+    #
+    # We check here whether the hanging conditions might be met: NumPy installed,
+    # but not imported yet. And if so, issue a stern warning, as a kindness.
+    try:
+        from importlib.metadata import distributions
+
+        numpy_installed = any(
+            dist.metadata["Name"] == "numpy" for dist in distributions()
+        )
+        if numpy_installed and "numpy" not in globals():
+            print(
+                "[WARNING] This environment includes numpy, but numpy was not imported via a service init script.",
+                file=sys.stderr,
+            )
+            print(
+                "[WARNING] If you attempt to `import numpy` in a task on Windows, the task will hang!",
+                file=sys.stderr,
+            )
+            print(
+                "[WARNING] See https://github.com/apposed/appose/issues/23 for details.",
+                file=sys.stderr,
+            )
+    except Exception:
+        pass
+
     worker.run()
 
 
