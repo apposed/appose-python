@@ -177,6 +177,8 @@ class Worker:
 
         # Flag this process as a worker, not a service.
         message._worker_mode = True
+        # Store reference to this worker for auto-export functionality.
+        message._worker_instance = self
 
     def run(self) -> None:
         """
