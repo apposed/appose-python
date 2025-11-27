@@ -93,11 +93,13 @@ def create(service: Service, var: str, queue: str | None = None) -> Any:
             self._queue = queue
 
         def __getattr__(self, name: str):
-            # Immediately evaluate the attribute access on the worker.
-            attr_expr = f"{self._var}.{name}"
+            # Use the service's ScriptSyntax to generate the attribute access script.
+            # This allows language-specific handling (e.g., Groovy's field vs method).
+            syntax.validate(self._service)
+            script = self._service._syntax.get_attribute(self._var, name)
 
             try:
-                task = self._service.task(attr_expr, queue=self._queue)
+                task = self._service.task(script, queue=self._queue)
                 task.wait_for()
                 result = task.result()
                 # If result is a worker_object, it will already be a ProxyObject

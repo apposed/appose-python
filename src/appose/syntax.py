@@ -89,22 +89,20 @@ class ScriptSyntax(ABC):
         ...
 
     @abstractmethod
-    def invoke_method(
-        self, object_var_name: str, method_name: str, arg_var_names: list[str]
-    ) -> str:
+    def get_attribute(self, object_var_name: str, attribute_name: str) -> str:
         """
-        Generate a script expression to invoke a method on an object.
+        Generate a script expression to retrieve a single attribute from an object.
 
-        The object must have been previously exported using task.export().
-        This is used by the proxy mechanism to forward method calls to remote objects.
+        This is used by proxy objects to implement __getattr__() for attribute access.
+        The implementation should handle both fields and methods appropriately for
+        the target language.
 
         Args:
             object_var_name: The name of the variable referencing the object.
-            method_name: The name of the method to invoke.
-            arg_var_names: The names of input variables containing the arguments.
+            attribute_name: The name of the attribute to retrieve.
 
         Returns:
-            A script expression that invokes the method and evaluates to its result.
+            A script expression that evaluates to the attribute value or method reference.
         """
         ...
 
@@ -148,11 +146,10 @@ class PythonSyntax(ScriptSyntax):
         # Python function call syntax: function(arg0, arg1, ...)
         return f"{function}({', '.join(arg_var_names)})"
 
-    def invoke_method(
-        self, object_var_name: str, method_name: str, arg_var_names: list[str]
-    ) -> str:
-        # Python method invocation: object.method(arg0, arg1, ...)
-        return f"{object_var_name}.{method_name}({', '.join(arg_var_names)})"
+    def get_attribute(self, object_var_name: str, attribute_name: str) -> str:
+        # Python attribute access: object.attribute
+        # This returns either the field value or a bound method object.
+        return f"{object_var_name}.{attribute_name}"
 
     def get_attributes(self, object_var_name: str) -> str:
         # Return all attributes from dir(), including private ones.
@@ -185,11 +182,14 @@ class GroovySyntax(ScriptSyntax):
         # Groovy function call syntax: function(arg0, arg1, ...)
         return f"{function}({', '.join(arg_var_names)})"
 
-    def invoke_method(
-        self, object_var_name: str, method_name: str, arg_var_names: list[str]
-    ) -> str:
-        # Groovy method invocation: object.method(arg0, arg1, ...)
-        return f"{object_var_name}.{method_name}({', '.join(arg_var_names)})"
+    def get_attribute(self, object_var_name: str, attribute_name: str) -> str:
+        # Groovy attribute access: try field first, then method reference.
+        # This handles the case where both field and method exist with same name:
+        # field access takes precedence (Groovy semantics).
+        return (
+            f"try {{ {object_var_name}.{attribute_name} }} "
+            f"catch (groovy.lang.MissingPropertyException e) {{ {object_var_name}.&{attribute_name} }}"
+        )
 
     def get_attributes(self, object_var_name: str) -> str:
         # Return all method names and property names from the object's metaclass.
