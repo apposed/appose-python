@@ -173,3 +173,107 @@ task.export(bird=Bird(), fish=Fish())
             fish.dive(100) == "Swam down 100 deep"
             or fish.dive(100) == "Swam down 100.0 deep"
         )
+
+
+def test_auto_proxy():
+    """Test automatic proxying of non-serializable task outputs."""
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+
+        # Return a non-serializable object from a task - should auto-proxy
+        # datetime is not JSON-serializable
+        dt = service.task("import datetime\ndatetime.datetime(2024, 1, 15, 10, 30, 45)").wait_for().result()
+
+        # dt should be a proxy object now
+        assert dt is not None
+
+        # Access attributes on the proxied datetime
+        assert dt.year == 2024
+        assert dt.month == 1
+        assert dt.day == 15
+
+        # Call a method
+        iso_str = dt.isoformat()
+        assert "2024-01-15T10:30:45" == iso_str
+
+        # Access a field that returns a primitive type
+        # Counter doesn't have simple fields, so let's create a custom class
+        custom = service.task("""
+class CustomClass:
+    def __init__(self):
+        self.value = 42
+        self.name = "test"
+
+    def get_double(self):
+        return self.value * 2
+
+CustomClass()
+""").wait_for().result()
+
+        # Access primitive fields
+        assert custom.value == 42
+        assert custom.name == "test"
+
+        # Call a method
+        assert custom.get_double() == 84
+
+        # Test nested object access
+        nested = service.task("""
+class Inner:
+    def __init__(self):
+        self.data = "inner_data"
+
+    def process(self, x):
+        return f"processed: {x}"
+
+class Outer:
+    def __init__(self):
+        self.inner = Inner()
+        self.label = "outer"
+
+Outer()
+""").wait_for().result()
+
+        # Access nested object
+        assert nested.label == "outer"
+        inner = nested.inner
+        assert inner.data == "inner_data"
+        assert inner.process("test") == "processed: test"
+
+        # Or chain it all together
+        result = nested.inner.process("chained")
+        assert result == "processed: chained"
+
+
+def test_callable_proxy():
+    """Test that proxied callable objects work correctly."""
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+
+        # Create a lambda function
+        func = service.task("lambda x, y: x + y").wait_for().result()
+
+        # Call it
+        result = func(10, 32)
+        assert result == 42
+
+        # Create a custom callable class
+        callable_obj = service.task("""
+class Adder:
+    def __init__(self, offset):
+        self.offset = offset
+
+    def __call__(self, x):
+        return x + self.offset
+
+Adder(100)
+""").wait_for().result()
+
+        # Call the callable object
+        result = callable_obj(23)
+        assert result == 123
+
+        # Access a field on the callable object
+        assert callable_obj.offset == 100

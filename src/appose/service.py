@@ -20,7 +20,7 @@ from uuid import uuid4
 
 from .syntax import ScriptSyntax, get as syntax_from_name
 from .util import process
-from .util.message import Args, decode, encode
+from .util.message import Args, decode, encode, proxify_worker_objects
 
 
 class TaskException(Exception):
@@ -685,7 +685,9 @@ class Task:
             self.status = TaskStatus.COMPLETE
             outputs = response.get("outputs")
             if outputs is not None:
-                self.outputs.update(outputs)
+                # Convert any worker_object references to ProxyObject instances.
+                proxified_outputs = proxify_worker_objects(outputs, self.service)
+                self.outputs.update(proxified_outputs)
         elif response_type == ResponseType.CANCELATION:
             self.service._tasks.pop(self.uuid, None)
             self.status = TaskStatus.CANCELED
