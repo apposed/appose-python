@@ -108,6 +108,21 @@ class ScriptSyntax(ABC):
         """
         ...
 
+    @abstractmethod
+    def get_attributes(self, object_var_name: str) -> str:
+        """
+        Generate a script expression to retrieve the list of attributes of an object.
+
+        This is used by proxy objects to implement __dir__() for runtime introspection.
+
+        Args:
+            object_var_name: The name of the variable referencing the object.
+
+        Returns:
+            A script expression that evaluates to a list of attribute names.
+        """
+        ...
+
 
 class PythonSyntax(ScriptSyntax):
     """
@@ -138,6 +153,11 @@ class PythonSyntax(ScriptSyntax):
     ) -> str:
         # Python method invocation: object.method(arg0, arg1, ...)
         return f"{object_var_name}.{method_name}({', '.join(arg_var_names)})"
+
+    def get_attributes(self, object_var_name: str) -> str:
+        # Return all attributes from dir(), including private ones.
+        # Let the object's __dir__ implementation decide what to expose.
+        return f"dir({object_var_name})"
 
 
 class GroovySyntax(ScriptSyntax):
@@ -170,6 +190,11 @@ class GroovySyntax(ScriptSyntax):
     ) -> str:
         # Groovy method invocation: object.method(arg0, arg1, ...)
         return f"{object_var_name}.{method_name}({', '.join(arg_var_names)})"
+
+    def get_attributes(self, object_var_name: str) -> str:
+        # Return all method names and property names from the object's metaclass.
+        # Groovy's metaClass provides runtime introspection.
+        return f"({object_var_name}.metaClass.methods*.name + {object_var_name}.metaClass.properties*.name).unique()"
 
 
 # All known script syntax implementations.

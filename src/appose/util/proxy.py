@@ -127,4 +127,16 @@ def create(service: Service, var: str, queue: str | None = None) -> Any:
             except Exception as e:
                 raise RuntimeError(str(e)) from e
 
+        def __dir__(self):
+            # Query the remote object for its attributes via introspection.
+            syntax.validate(self._service)
+            script = self._service._syntax.get_attributes(self._var)
+
+            try:
+                task = self._service.task(script, queue=self._queue)
+                task.wait_for()
+                return task.result()
+            except Exception as e:
+                raise RuntimeError(str(e)) from e
+
     return ProxyObject(service, var, queue)  # type: ignore

@@ -277,3 +277,53 @@ Adder(100)
 
         # Access a field on the callable object
         assert callable_obj.offset == 100
+
+
+def test_proxy_dir():
+    """Test that dir() works on proxy objects."""
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+
+        # Create a custom class with known attributes
+        obj = service.task("""
+class TestClass:
+    def __init__(self):
+        self.field1 = 42
+        self.field2 = "hello"
+
+    def method1(self):
+        return "method1"
+
+    def method2(self, x):
+        return x * 2
+
+TestClass()
+""").wait_for().result()
+
+        # Get dir() output
+        attrs = dir(obj)
+
+        # Should be a list
+        assert isinstance(attrs, list)
+
+        # Should contain our custom attributes
+        assert "field1" in attrs
+        assert "field2" in attrs
+        assert "method1" in attrs
+        assert "method2" in attrs
+
+        # Should also contain standard object attributes
+        assert "__init__" in attrs
+        assert "__class__" in attrs
+
+        # Test with a built-in object (datetime)
+        dt = service.task("import datetime\ndatetime.datetime(2024, 1, 15)").wait_for().result()
+        dt_attrs = dir(dt)
+
+        assert isinstance(dt_attrs, list)
+        assert "year" in dt_attrs
+        assert "month" in dt_attrs
+        assert "day" in dt_attrs
+        assert "isoformat" in dt_attrs
+        assert "replace" in dt_attrs
