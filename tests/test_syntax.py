@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import pytest
-from typing import Protocol
 
 import appose
 from appose import TaskException
@@ -183,7 +182,11 @@ def test_auto_proxy():
 
         # Return a non-serializable object from a task - should auto-proxy
         # datetime is not JSON-serializable
-        dt = service.task("import datetime\ndatetime.datetime(2024, 1, 15, 10, 30, 45)").wait_for().result()
+        dt = (
+            service.task("import datetime\ndatetime.datetime(2024, 1, 15, 10, 30, 45)")
+            .wait_for()
+            .result()
+        )
 
         # dt should be a proxy object now
         assert dt is not None
@@ -199,7 +202,8 @@ def test_auto_proxy():
 
         # Access a field that returns a primitive type
         # Counter doesn't have simple fields, so let's create a custom class
-        custom = service.task("""
+        custom = (
+            service.task("""
 class CustomClass:
     def __init__(self):
         self.value = 42
@@ -209,7 +213,10 @@ class CustomClass:
         return self.value * 2
 
 CustomClass()
-""").wait_for().result()
+""")
+            .wait_for()
+            .result()
+        )
 
         # Access primitive fields
         assert custom.value == 42
@@ -219,7 +226,8 @@ CustomClass()
         assert custom.get_double() == 84
 
         # Test nested object access
-        nested = service.task("""
+        nested = (
+            service.task("""
 class Inner:
     def __init__(self):
         self.data = "inner_data"
@@ -233,7 +241,10 @@ class Outer:
         self.label = "outer"
 
 Outer()
-""").wait_for().result()
+""")
+            .wait_for()
+            .result()
+        )
 
         # Access nested object
         assert nested.label == "outer"
@@ -260,7 +271,8 @@ def test_callable_proxy():
         assert result == 42
 
         # Create a custom callable class
-        callable_obj = service.task("""
+        callable_obj = (
+            service.task("""
 class Adder:
     def __init__(self, offset):
         self.offset = offset
@@ -269,7 +281,10 @@ class Adder:
         return x + self.offset
 
 Adder(100)
-""").wait_for().result()
+""")
+            .wait_for()
+            .result()
+        )
 
         # Call the callable object
         result = callable_obj(23)
@@ -286,7 +301,8 @@ def test_proxy_dir():
         maybe_debug(service)
 
         # Create a custom class with known attributes
-        obj = service.task("""
+        obj = (
+            service.task("""
 class TestClass:
     def __init__(self):
         self.field1 = 42
@@ -299,7 +315,10 @@ class TestClass:
         return x * 2
 
 TestClass()
-""").wait_for().result()
+""")
+            .wait_for()
+            .result()
+        )
 
         # Get dir() output
         attrs = dir(obj)
@@ -318,7 +337,11 @@ TestClass()
         assert "__class__" in attrs
 
         # Test with a built-in object (datetime)
-        dt = service.task("import datetime\ndatetime.datetime(2024, 1, 15)").wait_for().result()
+        dt = (
+            service.task("import datetime\ndatetime.datetime(2024, 1, 15)")
+            .wait_for()
+            .result()
+        )
         dt_attrs = dir(dt)
 
         assert isinstance(dt_attrs, list)
