@@ -58,11 +58,11 @@ class Service:
         self._stdout_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
         self._monitor_thread: threading.Thread | None = None
-        self._debug_callback: Callable[[Any], Any] | None = None
+        self._debug_callback: Callable[[str], Any] | None = None
         self._init_script: str | None = None
         self._syntax: ScriptSyntax | None = None
 
-    def debug(self, debug_callback: Callable[[Any], Any]) -> None:
+    def debug(self, debug_callback: Callable[[str], Any]) -> "Service":
         """
         Register a callback function to receive messages describing current
         service/worker activity.
@@ -71,6 +71,7 @@ class Service:
             debug_callback: A function that accepts a single string argument.
         """
         self._debug_callback = debug_callback
+        return self
 
     def init(self, script: str) -> "Service":
         """
@@ -98,7 +99,7 @@ class Service:
         self._init_script = script
         return self
 
-    def start(self) -> None:
+    def start(self) -> "Service":
         """
         Explicitly launch the worker process associated with this service.
 
@@ -107,6 +108,9 @@ class Service:
         get going asynchronously before running the first task, or if you
         want to register a debug callback before the process starts to ensure
         you don't miss any events that occur early in the worker execution.
+
+        Returns:
+            This service object, for chaining method calls.
         """
         if self._process is not None:
             # Already started.
@@ -140,6 +144,7 @@ class Service:
         self._stdout_thread.start()
         self._stderr_thread.start()
         self._monitor_thread.start()
+        return self
 
     def task(
         self, script: str, inputs: Args | None = None, queue: str | None = None
