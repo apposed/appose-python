@@ -8,6 +8,7 @@ The appose.service package contains classes for services and tasks.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import threading
@@ -54,6 +55,8 @@ class Service:
         self._tasks: dict[str, "Task"] = {}
         self._service_id: int = Service._service_count
         Service._service_count += 1
+        self._invalid_lines: list[str] = []
+        self._error_lines: list[str] = []
         self._process: subprocess.Popen | None = None
         self._stdout_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
@@ -298,7 +301,60 @@ class Service:
             raise RuntimeError("Service has not been started")
         self._process.stdin.close()
 
+    def kill(self) -> None:
+        """
+        Force the service's worker process to begin shutting down. Any tasks still
+        pending completion will be interrupted, reporting TaskStatus.CRASHED.
 
+        To shut down the service more gently, allowing any pending tasks to run to
+        completion, use close() instead.
+
+        To wait until the service's worker process has completely shut down
+        and all output has been reported, call wait_for() afterward.
+        """
+        self._process.kill()
+
+    def wait_for(self) -> int:
+        """
+        Wait for the service's worker process to terminate.
+
+        Returns:
+            Exit value of the worker process.
+        """
+        self._process.wait()
+
+        # Wait for worker output processing threads to finish up.
+        self._stdout_thread.join()
+        self._stderr_thread.join()
+        self._monitor_thread.join()
+
+        return self._process.returncode
+
+    def is_alive(self) -> bool:
+        """
+        Return true if the service's worker process is currently running,
+        or false if it has not yet started or has already shut down or crashed.
+
+        Returns:
+            Whether the service's worker process is currently running.
+        """
+        return self._process is not None and self._process.poll() is None
+
+    def invalid_lines(self) -> list[str]:
+        """
+        Unparseable lines emitted by the worker process on its stdout stream,
+        collected over the lifetime of the service.
+        Can be useful for analyzing why a worker process has crashed.
+        """
+        return self._invalid_lines
+
+    def error_lines(self) -> list[str]:
+        """
+        Lines emitted by the worker process on its stderr stream,
+        collected over the lifetime of the service.
+        Can be useful for analyzing why a worker process has crashed.
+        """
+        return self._error_lines
 
     def _stdout_loop(self) -> None:
         """
@@ -310,7 +366,7 @@ class Service:
             try:
                 line = None if stdout is None else stdout.readline()
             except Exception:
-                # Something went wrong reading the line. Panic!
+                # Something went wrong reading the stdout line. Panic!
                 self._debug_service(format_exc())
                 break
 
@@ -336,22 +392,26 @@ class Service:
                 # Something went wrong decoding the line of JSON.
                 # Skip it and keep going, but log it first.
                 self._debug_service(f"<INVALID> {line}")
+                self._invalid_lines.append(line.rstrip("\n\r"))
 
     def _stderr_loop(self) -> None:
         """
         Input loop processing lines from the worker's stderr stream.
         """
-        # noinspection PyBroadException
-        try:
-            while True:
-                stderr = self._process.stderr
+        while True:
+            stderr = self._process.stderr
+            # noinspection PyBroadException
+            try:
                 line = None if stderr is None else stderr.readline()
-                if not line:  # readline returns empty string upon EOF
-                    self._debug_service("<worker stderr closed>")
-                    return
-                self._debug_worker(line)
-        except Exception:
-            self._debug_service(format_exc())
+            except Exception:
+                # Something went wrong reading the stderr line. Panic!
+                self._debug_service(format_exc())
+                break
+            if not line:  # readline returns empty string upon EOF
+                self._debug_service("<worker stderr closed>")
+                break
+            self._debug_worker(line)
+            self._error_lines.append(line.rstrip("\n\r"))
 
     def _monitor_loop(self) -> None:
         # Wait until the worker process terminates.
@@ -364,15 +424,33 @@ class Service:
                 f"<worker process terminated with exit code {exit_code}>"
             )
         task_count = len(self._tasks)
-        if task_count > 0:
-            self._debug_service(
-                f"<worker process terminated with {task_count} pending tasks>"
-            )
+        if task_count == 0:
+            # No hanging tasks to clean up.
+            return
+
+        self._debug_service(
+            "<worker process terminated with "
+            + f"{task_count} pending task{'' if task_count == 1 else 's'}>"
+        )
 
         # Notify any remaining tasks about the process crash.
+        nl = os.linesep
+        error_parts = [f"Worker crashed with exit code {exit_code}."]
+        error_parts.append("")
+        error_parts.append("[stdout]")
+        if len(self._invalid_lines) == 0:
+            error_parts.append("<none>")
+        else:
+            error_parts.extend(self._invalid_lines)
+        error_parts.append("")
+        error_parts.append("[stderr]")
+        if len(self._error_lines) == 0:
+            error_parts.append("<none>")
+        else:
+            error_parts.extend(self._error_lines)
+        error = nl.join(error_parts) + nl
         for task in self._tasks.values():
-            task._crash()
-
+            task._crash(error)
         self._tasks.clear()
 
     def _debug_service(self, message: str) -> None:
@@ -405,12 +483,17 @@ class TaskStatus(Enum):
     FAILED = "FAILED"
     CRASHED = "CRASHED"
 
-    def is_finished(self):
+    def is_finished(self) -> bool:
         """
         True iff status is COMPLETE, CANCELED, FAILED, or CRASHED.
         """
+        return self == TaskStatus.COMPLETE or self.is_error()
+
+    def is_error(self) -> bool:
+        """
+        True iff status is CANCELED, FAILED, or CRASHED.
+        """
         return self in (
-            TaskStatus.COMPLETE,
             TaskStatus.CANCELED,
             TaskStatus.FAILED,
             TaskStatus.CRASHED,
@@ -434,7 +517,7 @@ class ResponseType(Enum):
     True iff response type is COMPLETE, CANCELED, FAILED, or CRASHED.
     """
 
-    def is_terminal(self):
+    def is_terminal(self) -> bool:
         return self in (
             ResponseType.COMPLETION,
             ResponseType.CANCELATION,
@@ -629,9 +712,10 @@ class Task:
             with self.cv:
                 self.cv.notify_all()
 
-    def _crash(self):
+    def _crash(self, error: str):
         event = TaskEvent(self, ResponseType.CRASH)
         self.status = TaskStatus.CRASHED
+        self.error = error
         for listener in self.listeners:
             listener(event)
         with self.cv:

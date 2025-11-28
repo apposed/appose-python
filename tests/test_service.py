@@ -4,9 +4,12 @@
 
 
 import appose
-from appose.service import TaskStatus
+from appose.service import ResponseType, TaskException, TaskStatus
 from tests.test_base import execute_and_assert, maybe_debug
 from pathlib import Path
+import time
+import os
+import re
 
 collatz_groovy = """
 // Computes the stopping time of a given value
@@ -190,3 +193,164 @@ def test_init_numpy():
             actual_val = result[i]
             assert isinstance(actual_val, (int, float))
             assert abs(actual_val - expected_val) < 1e-10
+
+
+def test_task_failure_python():
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+        script = "whee\n"
+        try:
+            service.task(script).wait_for()
+            raise AssertionError("Expected TaskException for failed script")
+        except TaskException as e:
+            expected_error = "NameError: name 'whee' is not defined"
+            assert expected_error in str(e)
+
+
+def test_startup_crash():
+    env = appose.system()
+    python_exes = ["python", "python3", "python.exe"]
+    service = env.service(python_exes, "-c", "import nonexistentpackage").start()
+    # Wait up to 500ms for the crash.
+    for i in range(100):
+        if not service.is_alive():
+            break
+        time.sleep(0.005)
+    assert not service.is_alive()
+    # Check that the crash happened and was recorded correctly.
+    error_lines = service.error_lines()
+    assert error_lines is not None
+    assert len(error_lines) > 0
+    error = error_lines[-1]
+    assert error == "ModuleNotFoundError: No module named 'nonexistentpackage'"
+
+
+def test_python_sys_exit():
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+
+        # Launch a task that calls sys.exit. This is a nasty thing to do
+        # because Python does not exit the worker process when sys.exit is
+        # called within a dedicated threading.Thread; the thread just dies.
+        # So in addition to testing the Python code here, we are also testing
+        # that Appose's python_worker handles this situation well.
+        try:
+            service.task("import sys\nsys.exit(123)").wait_for()
+            raise AssertionError("Expected TaskException for sys.exit")
+        except TaskException as e:
+            # The failure should be either "thread death" or a "SystemExit" message.
+            assert "thread death" in str(e) or "SystemExit: 123" in str(e)
+
+
+def test_crash_with_active_task():
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+        # Create a "long-running" task.
+        script = (
+            "import sys\n"
+            "sys.stderr.write('one\\n')\n"
+            "sys.stderr.flush()\n"
+            "print('two')\n"
+            "sys.stdout.flush()\n"
+            "sys.stderr.write('three\\n')\n"
+            "sys.stderr.flush()\n"
+            "task.update('halfway')\n"
+            "print('four')\n"
+            "sys.stdout.flush()\n"
+            "sys.stderr.write('five\\n')\n"
+            "sys.stderr.flush()\n"
+            "print('six')\n"
+            "sys.stdout.flush()\n"
+            "sys.stderr.write('seven\\n')\n"
+            "task.update('crash-me')\n"
+            "import time; time.sleep(999)\n"
+        )
+        ready = [False]
+
+        def on_crash_me(event):
+            if event.message == "crash-me":
+                ready[0] = True
+
+        task = service.task(script)
+        task.listen(on_crash_me)
+
+        # Record any crash reported in the task notifications.
+        reported_error = [None]
+
+        def on_crash(event):
+            if event.response_type == ResponseType.CRASH:
+                reported_error[0] = task.error
+
+        task.listen(on_crash)
+
+        # Launch the task.
+        task.start()
+
+        # Simulate a crash after the script has emitted its output.
+        while not ready[0]:
+            time.sleep(0.005)
+        service.kill()
+
+        # Wait for the service to fully shut down after the crash.
+        exit_code = service.wait_for()
+        assert exit_code != 0
+
+        # Is the task flagged as crashed?
+        assert TaskStatus.CRASHED == task.status
+
+        # Was the crash error successfully and consistently recorded?
+        assert reported_error[0] is not None
+        nl = os.linesep
+        assert service.invalid_lines() == ["two", "four", "six"]
+        assert service.error_lines() == ["one", "three", "five", "seven"]
+        expected = (
+            f"Worker crashed with exit code ###.{nl}"
+            f"{nl}"
+            f"[stdout]{nl}"
+            f"two{nl}"
+            f"four{nl}"
+            f"six{nl}"
+            f"{nl}"
+            f"[stderr]{nl}"
+            f"one{nl}"
+            f"three{nl}"
+            f"five{nl}"
+            f"seven{nl}"
+        )
+        generalized_error = re.sub(r"exit code -?[0-9]+", "exit code ###", task.error)
+        assert expected == generalized_error
+
+
+def test_task_result():
+    """Tests Task.result() convenience method."""
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+
+        # Create a task that produces a result.
+        task = service.task("'success'").wait_for()
+        assert TaskStatus.COMPLETE == task.status
+
+        # Test the result() convenience method.
+        result = task.result()
+        assert result == "success"
+
+        # Verify it's the same as directly accessing outputs.
+        assert task.outputs.get("result") == result
+
+
+def test_task_result_null():
+    """Tests Task.result() returns None when no result is set."""
+    env = appose.system()
+    with env.python() as service:
+        maybe_debug(service)
+
+        # Create a task that doesn't set a result.
+        task = service.task("print('no result')").wait_for()
+        assert TaskStatus.COMPLETE == task.status
+
+        # result() should return None.
+        assert task.result() is None
