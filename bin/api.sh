@@ -32,5 +32,8 @@ done
 # Remove empty files.
 find api -size 0 -exec rm "{}" \;
 
+# Rename python_worker.api -> worker.api.
+mv api/appose/python_worker.api api/appose/worker.api
+
 # Post-process API: normalize | None to ?, expand optional parameters.
 python3 "$postprocessScript" api
