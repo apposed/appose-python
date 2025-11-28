@@ -293,11 +293,7 @@ class Service:
             raise RuntimeError("Service has not been started")
         self._process.stdin.close()
 
-    def __enter__(self) -> "Service":
-        return self
 
-    def __exit__(self, exc_type, exc_value, exc_tb) -> None:
-        self.close()
 
     def _stdout_loop(self) -> None:
         """
@@ -387,6 +383,12 @@ class Service:
         if self._debug_callback is None:
             return
         self._debug_callback(f"[{prefix}-{self._service_id}] {message}")
+
+    def __enter__(self) -> "Service":
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb) -> None:
+        self.close()
 
 
 class TaskStatus(Enum):
