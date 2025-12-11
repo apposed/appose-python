@@ -1,8 +1,16 @@
 # Appose Python
 
-***WARNING: Appose is currently in incubation.
-Not all features described below are functional.
-This document has some aspirational aspects!***
+[![Build Status](https://github.com/apposed/appose-python/actions/workflows/build.yml/badge.svg)](https://github.com/apposed/appose-python/actions/workflows/build.yml)
+
+> [!NOTE]
+> **QUICK START:** [Appose Workshop](https://fiji.github.io/i2k-2025-appose/)
+
+|   |   |
+|---|---|
+| <img src="https://docs.apposed.org/en/latest/_static/icons/hammer-solid-full.svg" width="24" height="24"> | **Build environments** based on community standards ([pixi](https://pixi.sh), [mamba](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html), [uv](https://docs.astral.sh/uv/)) |
+| <img src="https://docs.apposed.org/en/latest/_static/icons/code-solid-full.svg" width="24" height="24"> | **Run scripts** in those environments as worker processes |
+| <img src="https://docs.apposed.org/en/latest/_static/icons/microchip-solid-full.svg" width="24" height="24"> | **Share memory** between processes to avoid copying data |
+|   |
 
 ## What is Appose?
 
