@@ -162,6 +162,30 @@ def unpack(input_file: Path, output_dir: Path) -> None:
     elif filename.endswith(".zip"):
         un_zip(input_file, output_dir)
     else:
+        _unpack_by_magic_bytes(input_file, output_dir)
+
+
+def _unpack_by_magic_bytes(input_file: Path, output_dir: Path) -> None:
+    """
+    Detect archive format from magic bytes and unpack accordingly.
+
+    Used when the file extension is missing or unrecognized (e.g. when the
+    server serves the file directly without a redirect to a named URL).
+    """
+    with open(input_file, "rb") as f:
+        magic = f.read(6)
+    if len(magic) < 2:
+        raise OSError(f"File too small to detect archive type: {input_file.name}")
+    # GZip magic: 1F 8B
+    if magic[:2] == b"\x1f\x8b":
+        un_tar_gz(input_file, output_dir)
+    # BZip2 magic: 42 5A 68 ("BZh")
+    elif magic[:3] == b"\x42\x5a\x68":
+        un_tar_bz2(input_file, output_dir)
+    # ZIP magic: 50 4B 03 04 ("PK\x03\x04")
+    elif magic[:4] == b"\x50\x4b\x03\x04":
+        un_zip(input_file, output_dir)
+    else:
         raise ValueError(f"Unsupported archive type for file: {input_file.name}")
 
 
