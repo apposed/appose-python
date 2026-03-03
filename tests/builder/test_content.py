@@ -36,7 +36,7 @@ TEST_RESOURCES: Path = Path(__file__).parent.parent / "resources" / "envs"
 # scheme detection, but deliberately incompatible with the builder under test.
 
 PIXI_TOML_STUB = """\
-[project]
+[workspace]
 name = "stub"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
