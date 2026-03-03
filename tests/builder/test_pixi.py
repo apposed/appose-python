@@ -150,6 +150,30 @@ dependencies:
     cowsay_and_assert(env, "yml!")
 
 
+def test_pixi_environment_selection():
+    """Tests that .environment() selects a non-default pixi environment."""
+    env = (
+        PixiBuilder()
+        .file(str(TEST_RESOURCES / "cowsay-multi-env.toml"))
+        .base("target/envs/pixi-multi-env")
+        .environment("alt")
+        .log_debug()
+        .build()
+    )
+    assert isinstance(env.builder(), PixiBuilder)
+    # Verify launch args include --environment alt
+    launch_args = env.launch_args()
+    assert "--environment" in launch_args, "launch_args should contain --environment"
+    idx = launch_args.index("--environment")
+    assert launch_args[idx + 1] == "alt"
+    # Verify bin path resolves to the alt environment directory
+    import os
+    assert os.sep + "alt" + os.sep in env.bin_paths()[0], (
+        "bin_paths should reference the alt environment"
+    )
+    cowsay_and_assert(env, "multi-env")
+
+
 def test_content_pixi_toml():
     """Tests auto-detecting builder from pixi.toml content string."""
     pixi_toml = """[workspace]

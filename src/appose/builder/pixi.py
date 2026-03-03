@@ -27,6 +27,24 @@ class PixiBuilder(BaseBuilder):
         super().__init__()
         self._conda_packages: list[str] = []
         self._pypi_packages: list[str] = []
+        self._pixi_environment: str | None = None
+
+    def environment(self, name: str) -> PixiBuilder:
+        """
+        Select which pixi environment to activate within the manifest.
+
+        Pixi supports multiple named environments in a single pixi.toml;
+        use this method to target one other than "default".
+        Maps to ``pixi run --environment <name>``.
+
+        Args:
+            name: The pixi environment name (e.g. "cuda", "cpu").
+
+        Returns:
+            This builder instance, for fluent-style programming.
+        """
+        self._pixi_environment = name
+        return self
 
     def conda(self, *packages: str) -> PixiBuilder:
         """
@@ -261,6 +279,8 @@ class PixiBuilder(BaseBuilder):
         env_dir_abs = env_dir.absolute()
         base = str(env_dir_abs)
 
+        env_name = self._pixi_environment if self._pixi_environment else "default"
+
         # Check which manifest file exists (pyproject.toml takes precedence)
         manifest_file = env_dir_abs / "pyproject.toml"
         if not manifest_file.exists():
@@ -273,7 +293,9 @@ class PixiBuilder(BaseBuilder):
             "--manifest-path",
             str(manifest_file.absolute()),
         ]
-        bin_paths = [str(env_dir_abs / ".pixi" / "envs" / "default" / "bin")]
+        if self._pixi_environment is not None:
+            launch_args.extend(["--environment", self._pixi_environment])
+        bin_paths = [str(env_dir_abs / ".pixi" / "envs" / env_name / "bin")]
 
         return self._create_env(base, bin_paths, launch_args)
 
