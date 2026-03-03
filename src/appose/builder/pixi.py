@@ -277,14 +277,20 @@ class PixiBuilder(BaseBuilder):
         """
         # Convert to absolute path for consistency
         env_dir_abs = env_dir.absolute()
-        base = str(env_dir_abs)
-
-        env_name = self._pixi_environment if self._pixi_environment else "default"
 
         # Check which manifest file exists (pyproject.toml takes precedence)
         manifest_file = env_dir_abs / "pyproject.toml"
         if not manifest_file.exists():
             manifest_file = env_dir_abs / "pixi.toml"
+
+        # Ensure the pixi environment is fully installed.
+        install_cmd = ["install", "--manifest-path", str(manifest_file.absolute())]
+        if self._pixi_environment is not None:
+            install_cmd.extend(["--environment", self._pixi_environment])
+        pixi.exec(*install_cmd)
+
+        base = str(env_dir_abs)
+        env_name = self._pixi_environment or "default"
 
         # Use the installed pixi command (full path)
         launch_args = [

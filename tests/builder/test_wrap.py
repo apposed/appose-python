@@ -12,6 +12,7 @@ import appose
 from appose.builder import BuildException, SimpleBuilder
 from appose.builder.mamba import MambaBuilder
 from appose.builder.pixi import PixiBuilder
+from appose.util.filepath import delete_recursively
 
 from tests.test_base import cowsay_and_assert
 
@@ -25,7 +26,13 @@ def test_wrap_pixi():
     pixi_dir = Path("target/test-wrap-pixi")
     pixi_dir.mkdir(parents=True, exist_ok=True)
     pixi_toml = pixi_dir / "pixi.toml"
-    pixi_toml.touch()
+    pixi_toml.write_text(
+        "[workspace]\n"
+        'name = "test-wrap-pixi"\n'
+        'channels = ["conda-forge"]\n'
+        'platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]\n',
+        encoding="utf-8",
+    )
 
     try:
         pixi_env = appose.wrap(pixi_dir)
@@ -38,10 +45,7 @@ def test_wrap_pixi():
             "Pixi environment should use pixi launcher"
         )
     finally:
-        if pixi_toml.exists():
-            pixi_toml.unlink()
-        if pixi_dir.exists():
-            pixi_dir.rmdir()
+        delete_recursively(pixi_dir)
 
 
 def test_wrap_mamba():

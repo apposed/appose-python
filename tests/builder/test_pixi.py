@@ -150,6 +150,28 @@ dependencies:
     cowsay_and_assert(env, "yml!")
 
 
+def test_build_installs_env():
+    """
+    Tests that PixiBuilder.build() fully installs the pixi environment,
+    i.e. that .pixi/envs/default exists after build() returns,
+    not only after the first pixi run invocation.
+    """
+    env = (
+        PixiBuilder()
+        .file(str(TEST_RESOURCES / "cowsay-pixi.toml"))
+        .base("target/envs/pixi-build-installs-env")
+        .log_debug()
+        .rebuild()
+    )
+    # The default pixi environment directory must exist right after build(),
+    # before any service is launched.
+    env_dir = Path(env.base()) / ".pixi" / "envs" / "default"
+    assert env_dir.is_dir(), (
+        f".pixi/envs/default should exist after build(), but was missing: {env_dir}"
+    )
+    cowsay_and_assert(env, "installed")
+
+
 def test_pixi_environment_selection():
     """Tests that .environment() selects a non-default pixi environment."""
     env = (
