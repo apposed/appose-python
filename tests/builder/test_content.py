@@ -125,7 +125,9 @@ def test_pixi_with_pixi_toml():
 
 
 def test_pixi_with_pyproject_toml():
-    content = (TEST_RESOURCES / "cowsay-pixi-pyproject.toml").read_text(encoding="utf-8")
+    content = (TEST_RESOURCES / "cowsay-pixi-pyproject.toml").read_text(
+        encoding="utf-8"
+    )
     env = (
         appose.pixi()
         .content(content)
@@ -152,12 +154,16 @@ def test_pixi_with_environment_yml():
 
 def test_pixi_with_requirements_txt():
     with pytest.raises(Exception):
-        appose.pixi().content(REQUIREMENTS_TXT_STUB).base("target/envs/content-pixi-requirements").build()
+        appose.pixi().content(REQUIREMENTS_TXT_STUB).base(
+            "target/envs/content-pixi-requirements"
+        ).build()
 
 
 def test_pixi_with_unrecognized():
     with pytest.raises(Exception):
-        appose.pixi().content(UNRECOGNIZED).base("target/envs/content-pixi-unknown").build()
+        appose.pixi().content(UNRECOGNIZED).base(
+            "target/envs/content-pixi-unknown"
+        ).build()
 
 
 # ======================== MambaBuilder ========================
@@ -178,22 +184,30 @@ def test_mamba_with_environment_yml():
 
 def test_mamba_with_pyproject_toml():
     with pytest.raises(Exception):
-        appose.mamba().content(PYPROJECT_TOML_STUB).base("target/envs/content-mamba-pyproject").build()
+        appose.mamba().content(PYPROJECT_TOML_STUB).base(
+            "target/envs/content-mamba-pyproject"
+        ).build()
 
 
 def test_mamba_with_requirements_txt():
     with pytest.raises(Exception):
-        appose.mamba().content(REQUIREMENTS_TXT_STUB).base("target/envs/content-mamba-requirements").build()
+        appose.mamba().content(REQUIREMENTS_TXT_STUB).base(
+            "target/envs/content-mamba-requirements"
+        ).build()
 
 
 def test_mamba_with_pixi_toml():
     with pytest.raises(Exception):
-        appose.mamba().content(PIXI_TOML_STUB).base("target/envs/content-mamba-pixi").build()
+        appose.mamba().content(PIXI_TOML_STUB).base(
+            "target/envs/content-mamba-pixi"
+        ).build()
 
 
 def test_mamba_with_unrecognized():
     with pytest.raises(Exception):
-        appose.mamba().content(UNRECOGNIZED).base("target/envs/content-mamba-unknown").build()
+        appose.mamba().content(UNRECOGNIZED).base(
+            "target/envs/content-mamba-unknown"
+        ).build()
 
 
 # ======================== DynamicBuilder (appose.content) ========================
@@ -236,7 +250,9 @@ def test_content_with_pixi_toml():
 
 
 def test_content_with_pyproject_toml():
-    content = (TEST_RESOURCES / "cowsay-pixi-pyproject.toml").read_text(encoding="utf-8")
+    content = (TEST_RESOURCES / "cowsay-pixi-pyproject.toml").read_text(
+        encoding="utf-8"
+    )
     env = (
         appose.content(content)
         .base("target/envs/content-dynamic-pyproject")

@@ -103,7 +103,11 @@ class PixiBuilder(BaseBuilder):
         if self._content is not None:
             if self._scheme is None:
                 self._scheme = scheme_from_content(self._content)
-            if self._scheme.name() not in ["pixi.toml", "pyproject.toml", "environment.yml"]:
+            if self._scheme.name() not in [
+                "pixi.toml",
+                "pyproject.toml",
+                "environment.yml",
+            ]:
                 raise ValueError(
                     f"PixiBuilder only supports pixi.toml, pyproject.toml, and environment.yml schemes, got: {self._scheme.name()}"
                 )
@@ -333,7 +337,13 @@ class PixiBuilderFactory(BuilderFactory):
         Returns:
             True if supported
         """
-        return scheme in ["pixi.toml", "pyproject.toml", "environment.yml", "conda", "pypi"]
+        return scheme in [
+            "pixi.toml",
+            "pyproject.toml",
+            "environment.yml",
+            "conda",
+            "pypi",
+        ]
 
     def priority(self) -> float:
         """

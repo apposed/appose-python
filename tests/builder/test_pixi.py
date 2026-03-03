@@ -190,6 +190,7 @@ def test_pixi_environment_selection():
     assert launch_args[idx + 1] == "alt"
     # Verify bin path resolves to the alt environment directory
     import os
+
     assert os.sep + "alt" + os.sep in env.bin_paths()[0], (
         "bin_paths should reference the alt environment"
     )
