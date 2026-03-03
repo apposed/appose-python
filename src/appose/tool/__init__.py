@@ -196,8 +196,13 @@ class Tool(ABC):
             Path to the downloaded file.
 
         Raises:
-            IOError: If download fails.
+            IOError: If download fails or URL is not available for this platform.
         """
+        if self.url is None:
+            raise IOError(
+                f"{self.name} is not available for this platform ({platform.PLATFORM}). "
+                "Please install it manually."
+            )
         return download.download(self.name, self.url, self._update_download_progress)
 
     @abstractmethod
