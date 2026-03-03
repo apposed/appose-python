@@ -108,6 +108,15 @@ class UvBuilder(BaseBuilder):
                 "'--index-url' or '--extra-index-url' directives.",
             )
 
+        # Validate content/scheme BEFORE installing any tools.
+        if self._content is not None:
+            if self._scheme is None:
+                self._scheme = scheme_from_content(self._content)
+            if self._scheme.name() not in ["requirements.txt", "pyproject.toml"]:
+                raise ValueError(
+                    f"UvBuilder only supports requirements.txt and pyproject.toml schemes, got: {self._scheme.name()}"
+                )
+
         try:
             uv.install()
 
@@ -120,16 +129,6 @@ class UvBuilder(BaseBuilder):
 
             # Handle source-based build (file or content)
             if self._content is not None:
-                # Infer scheme if not explicitly set
-                if self._scheme is None:
-                    self._scheme = scheme_from_content(self._content)
-
-                if self._scheme.name() not in ["requirements.txt", "pyproject.toml"]:
-                    raise BuildException(
-                        self,
-                        f"UvBuilder only supports requirements.txt and pyproject.toml schemes, got: {self._scheme.name()}",
-                    )
-
                 if self._scheme.name() == "pyproject.toml":
                     # Handle pyproject.toml - uses uv sync
                     # Create envDir if it doesn't exist

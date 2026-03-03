@@ -81,6 +81,15 @@ class PixiBuilder(BaseBuilder):
                 f"Cannot use PixiBuilder: environment already managed by uv/venv at {env_dir}",
             )
 
+        # Validate content/scheme BEFORE installing any tools.
+        if self._content is not None:
+            if self._scheme is None:
+                self._scheme = scheme_from_content(self._content)
+            if self._scheme.name() not in ["pixi.toml", "pyproject.toml", "environment.yml"]:
+                raise ValueError(
+                    f"PixiBuilder only supports pixi.toml, pyproject.toml, and environment.yml schemes, got: {self._scheme.name()}"
+                )
+
         pixi = Pixi()
 
         # Set up progress/output consumers
@@ -121,10 +130,6 @@ class PixiBuilder(BaseBuilder):
 
             # Handle source-based build (file or content)
             if self._content is not None:
-                # Infer scheme if not explicitly set
-                if self._scheme is None:
-                    self._scheme = scheme_from_content(self._content)
-
                 if not env_dir.exists():
                     env_dir.mkdir(parents=True, exist_ok=True)
 
@@ -300,7 +305,7 @@ class PixiBuilderFactory(BuilderFactory):
         Returns:
             True if supported
         """
-        return scheme in ["pixi.toml", "environment.yml", "conda", "pypi"]
+        return scheme in ["pixi.toml", "pyproject.toml", "environment.yml", "conda", "pypi"]
 
     def priority(self) -> float:
         """
