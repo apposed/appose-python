@@ -131,6 +131,7 @@ class Task:
                 self.outputs["result"] = result
             self._report_completion()
         except BaseException:
+            # TODO: Check whether sys.exit's SystemException is caught here!
             self.fail(traceback.format_exc())
 
     def _report_launch(self) -> None:
