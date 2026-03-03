@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
-from ..scheme import from_content as scheme_from_content
+from ..scheme import from_content as scheme_from_content, from_name as scheme_from_name
 from ..tool.pixi import Pixi
 
 
@@ -250,7 +250,7 @@ class PixiBuilder(BaseBuilder):
             # Read the content so rebuild() will work even after directory is deleted
             with open(pixi_toml, "r", encoding="utf-8") as f:
                 self._content = f.read()
-            self._scheme = scheme_from_content("pixi.toml")
+            self._scheme = scheme_from_name("pixi.toml")
         else:
             # Check for pyproject.toml
             pyproject_toml = env_path / "pyproject.toml"
@@ -258,7 +258,7 @@ class PixiBuilder(BaseBuilder):
                 # Read the content so rebuild() will work even after directory is deleted
                 with open(pyproject_toml, "r", encoding="utf-8") as f:
                     self._content = f.read()
-                self._scheme = scheme_from_content("pyproject.toml")
+                self._scheme = scheme_from_name("pyproject.toml")
 
         # Set the base directory and build (which will detect existing env)
         self.base(env_path)

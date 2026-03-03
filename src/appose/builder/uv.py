@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
 from ..environment import Environment
-from ..scheme import from_content as scheme_from_content
+from ..scheme import from_content as scheme_from_content, from_name as scheme_from_name
 from ..tool.uv import Uv
 from ..util.platform import is_windows
 
@@ -195,7 +195,7 @@ class UvBuilder(BaseBuilder):
             # Read the content so rebuild() will work even after directory is deleted
             with open(pyproject_toml, "r", encoding="utf-8") as f:
                 self._content = f.read()
-            self._scheme = scheme_from_content("pyproject.toml")
+            self._scheme = scheme_from_name("pyproject.toml")
         else:
             # Fall back to requirements.txt
             requirements_txt = env_path / "requirements.txt"
@@ -203,7 +203,7 @@ class UvBuilder(BaseBuilder):
                 # Read the content so rebuild() will work even after directory is deleted
                 with open(requirements_txt, "r", encoding="utf-8") as f:
                     self._content = f.read()
-                self._scheme = scheme_from_content("requirements.txt")
+                self._scheme = scheme_from_name("requirements.txt")
 
         # Set the base directory and build (which will detect existing env)
         self.base(env_path)
