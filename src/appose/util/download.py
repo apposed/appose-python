@@ -27,7 +27,7 @@ from .filepath import file_type
 def download(
     name: str,
     url_path: str,
-    progress_consumer: Callable[[int, int], None] | None = None,
+    progress_subscriber: Callable[[int, int], None] | None = None,
 ) -> Path:
     """
     Download a file from a URL to a temporary file.
@@ -35,7 +35,7 @@ def download(
     Args:
         name: Base name for the temporary file.
         url_path: The URL to download from.
-        progress_consumer: Optional callback to track download progress (current, total).
+        progress_subscriber: Optional callback to track download progress (current, total).
 
     Returns:
         Path to the downloaded temporary file.
@@ -97,8 +97,8 @@ def download(
                     f.write(chunk)
                     downloaded += len(chunk)
 
-                    if progress_consumer:
-                        progress_consumer(downloaded, file_size)
+                    if progress_subscriber:
+                        progress_subscriber(downloaded, file_size)
 
         # Verify download completed
         if temp_file.stat().st_size < file_size:
