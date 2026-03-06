@@ -11,9 +11,32 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..shm import NDArray, SharedMemory
-
 Args = dict[str, Any]
+
+_encoders: dict[type, tuple[str, Any]] = {}
+_decoders: dict[str, Any] = {}
+
+
+def register(obj_type: type, appose_type: str, encoder, decoder) -> None:
+    """
+    Register encoder and decoder functions for a custom Appose type.
+
+    When encoding, if an object is an instance of ``obj_type``, ``encoder``
+    is called with the object and its return value is wrapped as
+    ``{"appose_type": appose_type, "data": <encoded>}``.
+
+    When decoding, if a JSON object has the given ``appose_type``, ``decoder``
+    is called with the ``"data"`` field value and should return the
+    reconstructed Python object.
+
+    :param obj_type: The Python type to encode.
+    :param appose_type: The ``appose_type`` string used on the wire.
+    :param encoder: Callable ``(obj) -> JSON-compatible value``.
+    :param decoder: Callable ``(data) -> obj``.
+    """
+    _encoders[obj_type] = (appose_type, encoder)
+    _decoders[appose_type] = decoder
+
 
 # Flag indicating whether this process is running as an Appose worker.
 # Set to True by python_worker.Worker.__init__().
@@ -36,8 +59,9 @@ def decode(the_json: str) -> Args:
 
 class _ApposeJSONEncoder(json.JSONEncoder):
     def default(self, obj):
-        if hasattr(obj, "for_json"):
-            return obj.for_json()
+        for obj_type, (appose_type, encoder) in _encoders.items():
+            if isinstance(obj, obj_type):
+                return {"appose_type": appose_type, **encoder(obj)}
 
         # If in worker mode and object is not JSON-serializable,
         # auto-export it and return a worker_object reference.
@@ -60,17 +84,13 @@ class _ApposeJSONEncoder(json.JSONEncoder):
 
 def _appose_object_hook(obj: dict):
     atype = obj.get("appose_type")
-    if atype == "shm":
-        # Attach to existing shared memory block.
-        return SharedMemory(name=(obj["name"]), rsize=(obj["rsize"]))
-    elif atype == "ndarray":
-        return NDArray(obj["dtype"], obj["shape"], obj["shm"])
-    elif atype == "worker_object":
+    if atype == "worker_object":
         # Keep worker_object dicts as-is for now.
         # They will be converted to proxies by proxify_worker_objects().
         return obj
-    else:
-        return obj
+    if atype in _decoders:
+        return _decoders[atype](obj)
+    return obj
 
 
 def proxify_worker_objects(data: Any, service: Any) -> Any:
