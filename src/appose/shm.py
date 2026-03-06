@@ -105,6 +105,13 @@ class SharedMemory(shared_memory.SharedMemory):
         else:
             self.close()
 
+    def for_json(self):
+        return {
+            "appose_type": "shm",
+            "name": self.name,
+            "rsize": self.rsize,
+        }
+
     def __enter__(self) -> "SharedMemory":
         return self
 
@@ -161,6 +168,14 @@ class NDArray:
             ).reshape(self.shape)
         except ModuleNotFoundError:
             raise ImportError("NumPy is not available.")
+
+    def for_json(self):
+        return {
+            "appose_type": "ndarray",
+            "dtype": self.dtype,
+            "shape": self.shape,
+            "shm": self.shm,
+        }
 
     def __enter__(self) -> "NDArray":
         return self

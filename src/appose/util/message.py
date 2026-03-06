@@ -36,19 +36,8 @@ def decode(the_json: str) -> Args:
 
 class _ApposeJSONEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, SharedMemory):
-            return {
-                "appose_type": "shm",
-                "name": obj.name,
-                "rsize": obj.rsize,
-            }
-        if isinstance(obj, NDArray):
-            return {
-                "appose_type": "ndarray",
-                "dtype": obj.dtype,
-                "shape": obj.shape,
-                "shm": obj.shm,
-            }
+        if hasattr(obj, "for_json"):
+            return obj.for_json()
 
         # If in worker mode and object is not JSON-serializable,
         # auto-export it and return a worker_object reference.
