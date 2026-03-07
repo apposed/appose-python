@@ -109,13 +109,23 @@ class Environment:
         self.builder().delete()
         return self
 
-    def python(self) -> Service:
+    def python(self, *args) -> Service:
         """
-        Create a Python script service.
+        Create a Python script service, or launch a custom Python process.
 
-        This is a *high level* way to create a service, enabling execution of
-        Python scripts asynchronously on its linked process running a
-        `python_worker`.
+        If invoked without arguments, this is a *high level* way to create a
+        a service, enabling execution of Python scripts asynchronously on its
+        linked process running a `python_worker`.
+
+        Or if invoked with any arguments, this becomes a *lower level* function
+        for launching Python with any arguments of your choice. This can be
+        useful to perform actions such as installing a wheel (`python -m pip
+        install /path/to/wheel-file`), without the usual bother of
+        platform-specific special casing.
+
+        Args:
+            args: Optional alternate args to pass to the python process.
+                If empty, a normal Appose `python_worker` will be started.
 
         Returns:
             The newly created service.
@@ -133,11 +143,11 @@ class Environment:
             "bin/python",
             "bin/python.exe",
         ]
-        return self.service(
-            python_exes,
+        python_args = args or [
             "-c",
             "import appose.python_worker; appose.python_worker.main()",
-        ).syntax(PythonSyntax())
+        ]
+        return self.service(python_exes, *python_args).syntax(PythonSyntax())
 
     def groovy(
         self,
