@@ -167,7 +167,17 @@ class Tool(ABC):
             RuntimeError: If the tool has not been installed.
         """
         if not self.is_installed():
-            raise RuntimeError(f"{self.name} is not installed")
+            command_path = Path(self.command)
+            if command_path.is_file():
+                raise RuntimeError(
+                    f'{self.name} is installed at "{self.command}"'
+                    " but could not be run -- the path may contain characters"
+                    " that are special to the shell (e.g. parentheses on Windows)"
+                )
+            raise RuntimeError(
+                f"{self.name} is not installed"
+                f' (expected executable at "{self.command}")'
+            )
 
         self._do_exec(cwd=cwd, silent=False, include_flags=True, args=args)
 
@@ -278,8 +288,16 @@ class Tool(ABC):
         self._captured_output.clear()
         self._captured_error.clear()
 
-        # Build command
-        cmd = platform.base_command()
+        # Build command.
+        # On Windows, cmd.exe /c is needed for shell scripts and PATH resolution,
+        # but absolute paths to native executables must be invoked directly:
+        # cmd.exe treats parentheses and other characters as shell metacharacters,
+        # so a path like C:\Users\foo\Fiji(1)\bin\pixi.exe would be misinterpreted.
+        cmd = (
+            []
+            if platform.is_windows() and Path(self.command).is_absolute()
+            else platform.base_command()
+        )
         cmd.append(self.command)
         if include_flags:
             cmd.extend(self._flags)
