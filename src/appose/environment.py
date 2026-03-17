@@ -64,15 +64,14 @@ class Environment:
         # Default implementation - subclasses should override
         return {}
 
-    def builder(self) -> Builder | None:
+    def builder(self) -> Builder:
         """
         Get the builder that created this environment.
 
         Returns:
             The builder instance, or None if not created via a builder
         """
-        # Default implementation - subclasses should override
-        return None
+        ...
 
     def type(self) -> str:
         """
@@ -191,7 +190,7 @@ class Environment:
         jvm_args: list[str] | None = None,
     ) -> Service:
         # Collect classpath elements into a set, to avoid duplicate entries.
-        cp: dict[str] = {}  # NB: Use dict instead of set to maintain insertion order.
+        cp: dict[str, str | None] = {}  # NB: Use dict to maintain insertion order.
 
         # TODO: Ensure that the classpath includes Appose and its dependencies.
 

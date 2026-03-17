@@ -32,7 +32,7 @@ from appose.util.message import Args
 class Task:
     def __init__(
         self,
-        worker: "Worker" | None = None,
+        worker: "Worker | None" = None,
         uuid: str | None = None,
         script: str | None = None,
         inputs: Args | None = None,
@@ -100,7 +100,7 @@ class Task:
             # which we evaluate instead to get its return value.
             # Credit: https://stackoverflow.com/a/39381428/1207769
 
-            block = ast.parse(self._script, mode="exec")
+            block = ast.parse(self._script or "", mode="exec")
             last = None
             if (
                 len(block.body) > 0

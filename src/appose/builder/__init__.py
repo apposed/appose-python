@@ -58,7 +58,7 @@ class BuildException(Exception):
             message = f"{noun} {verb}"
         super().__init__(message)
         self.builder: Builder | None = builder
-        self.__cause__: Exception | None = cause
+        self.__cause__ = cause
 
 
 class Builder(ABC):
@@ -441,7 +441,7 @@ class BaseBuilder(Builder):
     def delete(self) -> None:
         """Default implementation: delete env_dir if it exists."""
         dir_path = self._env_dir
-        if dir_path.exists():
+        if dir_path is not None and dir_path.exists():
             shutil.rmtree(dir_path)
 
     def wrap(self, env_dir: str | Path) -> Environment:
@@ -856,7 +856,7 @@ def env_type(env_dir: str | Path) -> str | None:
         The environment type name (e.g., "pixi", "mamba", "uv"), or None if not a known environment
     """
     factory = find_factory_for_wrapping(env_dir)
-    return factory.name() if factory else None
+    return factory.env_type() if factory else None
 
 
 def _discover_factories() -> list[BuilderFactory]:
