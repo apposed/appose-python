@@ -288,17 +288,8 @@ class Tool(ABC):
         self._captured_output.clear()
         self._captured_error.clear()
 
-        # Build command.
-        # On Windows, cmd.exe /c is needed for shell scripts and PATH resolution,
-        # but absolute paths to native executables must be invoked directly:
-        # cmd.exe treats parentheses and other characters as shell metacharacters,
-        # so a path like C:\Users\foo\Fiji(1)\bin\pixi.exe would be misinterpreted.
-        cmd = (
-            []
-            if platform.is_windows() and Path(self.command).is_absolute()
-            else platform.base_command()
-        )
-        cmd.append(self.command)
+        # Build command
+        cmd = platform.command(self.command)
         if include_flags:
             cmd.extend(self._flags)
         cmd.extend(args)

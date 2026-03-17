@@ -124,13 +124,26 @@ def is_executable(file: Path) -> bool:
         return file.exists() and os.access(file, os.X_OK)
 
 
-def base_command() -> list[str]:
+def command(exe: str) -> list[str]:
     """
-    Get the arguments to prefix to execute a command in a separate process.
+    Get the command list needed to invoke the given executable.
+
+    On Windows, absolute paths to native executables are invoked directly
+    via subprocess, bypassing cmd.exe entirely. This is necessary because
+    cmd.exe treats parentheses and other characters as shell metacharacters,
+    which would break paths like C:\\Users\\foo\\Fiji(1)\\bin\\pixi.exe.
+    Relative names (which need shell PATH resolution) still get
+    ['cmd.exe', '/c'] prepended.
+
+    Args:
+        exe: The executable path or name to invoke.
 
     Returns:
-        ['cmd.exe', '/c'] for Windows and an empty list otherwise.
+        A list starting with the executable, preceded by ['cmd.exe', '/c']
+        when needed.
     """
-    if is_windows():
-        return ["cmd.exe", "/c"]
-    return []
+    from pathlib import Path
+
+    if is_windows() and not Path(exe).is_absolute():
+        return ["cmd.exe", "/c", exe]
+    return [exe]
