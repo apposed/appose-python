@@ -7,6 +7,7 @@
 from pathlib import Path
 
 
+import appose
 from appose.builder.uv import UvBuilder
 
 from tests.test_base import cowsay_and_assert
@@ -19,7 +20,8 @@ TEST_RESOURCES: Path = Path(__file__).parent.parent / "resources" / "envs"
 def test_uv():
     """Tests building from a requirements.txt file."""
     env = (
-        UvBuilder()
+        appose
+        .uv()
         .file(str(TEST_RESOURCES / "cowsay-requirements.txt"))
         .base("target/envs/uv-cowsay")
         .log_debug()
@@ -32,7 +34,8 @@ def test_uv():
 def test_uv_builder_api():
     """Tests the programmatic builder API for uv."""
     env = (
-        UvBuilder()
+        appose
+        .uv()
         .include("cowsay==6.1")
         .base("target/envs/uv-cowsay-builder")
         .log_debug()
@@ -45,10 +48,12 @@ def test_uv_builder_api():
 def test_uv_pyproject():
     """Tests building from a pyproject.toml file."""
     env = (
-        UvBuilder()
+        appose
+        .uv()
         .file(str(TEST_RESOURCES / "cowsay-pyproject.toml"))
         .base("target/envs/uv-cowsay-pyproject")
         .log_debug()
         .build()
     )
+    assert isinstance(env.builder(), UvBuilder)
     cowsay_and_assert(env, "pyproject")

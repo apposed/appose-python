@@ -7,7 +7,7 @@
 from pathlib import Path
 
 
-from appose.builder import DynamicBuilder
+import appose
 from appose.builder.mamba import MambaBuilder
 
 from tests.test_base import cowsay_and_assert
@@ -20,7 +20,7 @@ TEST_RESOURCES: Path = Path(__file__).parent.parent / "resources" / "envs"
 def test_explicit_mamba_builder():
     """Tests explicit mamba builder selection using .builder() method."""
     env = (
-        DynamicBuilder()
+        appose
         .file(str(TEST_RESOURCES / "cowsay.yml"))
         .builder("mamba")
         .base("target/envs/mamba-cowsay")

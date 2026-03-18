@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from appose.builder import DynamicBuilder
+import appose
 from appose.builder.pixi import PixiBuilder
 
 from tests.test_base import cowsay_and_assert
@@ -22,7 +22,7 @@ TEST_RESOURCES: Path = Path(__file__).parent.parent / "resources" / "envs"
 def test_conda():
     """Tests the builder-agnostic API with an environment.yml file."""
     env = (
-        DynamicBuilder()
+        appose
         .file(str(TEST_RESOURCES / "cowsay.yml"))
         .base("target/envs/conda-cowsay")
         .log_debug()
@@ -35,7 +35,8 @@ def test_conda():
 def test_pixi():
     """Tests building from a pixi.toml file."""
     env = (
-        PixiBuilder()
+        appose
+        .pixi()
         .file(str(TEST_RESOURCES / "cowsay-pixi.toml"))
         .base("target/envs/pixi-cowsay")
         .log_debug()
@@ -48,7 +49,8 @@ def test_pixi():
 def test_pixi_builder_api():
     """Tests the programmatic builder API for pixi."""
     env = (
-        PixiBuilder()
+        appose
+        .pixi()
         .conda("python>=3.8", "appose")
         .pypi("cowsay==6.1")
         .base("target/envs/pixi-cowsay-builder")
@@ -66,7 +68,7 @@ def test_pixi_vacuous():
         shutil.rmtree(base)
 
     with pytest.raises(Exception):  # Should raise IllegalStateException equivalent
-        PixiBuilder().base(base).log_debug().build()
+        appose.pixi().base(base).log_debug().build()
 
 
 def test_pixi_appose_requirement():
@@ -77,7 +79,8 @@ def test_pixi_appose_requirement():
 
     with pytest.raises(Exception):  # Should raise IllegalStateException equivalent
         (
-            PixiBuilder()
+            appose
+            .pixi()
             .conda("python")
             .pypi("cowsay==6.1")
             .base(base)
@@ -89,7 +92,8 @@ def test_pixi_appose_requirement():
 def test_pixi_pyproject():
     """Tests building from a pyproject.toml with pixi config."""
     env = (
-        PixiBuilder()
+        appose
+        .pixi()
         .file(str(TEST_RESOURCES / "cowsay-pixi-pyproject.toml"))
         .base("target/envs/pixi-cowsay-pyproject")
         .log_debug()
@@ -115,7 +119,8 @@ cowsay = "==6.1"
 """
 
     env = (
-        PixiBuilder()
+        appose
+        .pixi()
         .content(pixi_toml)
         .base("target/envs/pixi-content-test")
         .log_debug()
@@ -139,7 +144,7 @@ dependencies:
 """
 
     env = (
-        DynamicBuilder()
+        appose
         .content(env_yml)
         .base("target/envs/content-env-yml")
         .log_debug()
@@ -157,7 +162,8 @@ def test_build_installs_env():
     not only after the first pixi run invocation.
     """
     env = (
-        PixiBuilder()
+        appose
+        .pixi()
         .file(str(TEST_RESOURCES / "cowsay-pixi.toml"))
         .base("target/envs/pixi-build-installs-env")
         .log_debug()
@@ -175,7 +181,8 @@ def test_build_installs_env():
 def test_pixi_environment_selection():
     """Tests that .environment() selects a non-default pixi environment."""
     env = (
-        PixiBuilder()
+        appose
+        .pixi()
         .file(str(TEST_RESOURCES / "cowsay-multi-env.toml"))
         .base("target/envs/pixi-multi-env")
         .environment("alt")
@@ -213,7 +220,7 @@ cowsay = "==6.1"
 """
 
     env = (
-        DynamicBuilder()
+        appose
         .content(pixi_toml)
         .base("target/envs/content-pixi-toml")
         .log_debug()
