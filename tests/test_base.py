@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from appose import Environment
 from appose.service import ResponseType, Task, TaskStatus
@@ -121,6 +122,25 @@ def cowsay_and_assert(env: Environment, greeting: str):
         assert "^__^" in actual, "Output should contain cow face"
         assert "(oo)" in actual, "Output should contain cow eyes"
         assert "||----w |" in actual, "Output should contain cow legs"
+
+
+def source_override() -> dict[str, str]:
+    """
+    Return a PYTHONPATH env var override pointing to the local appose source tree.
+
+    When appose is installed from source (editable install), worker processes in
+    built environments would otherwise use their own PyPI-installed copy of appose.
+    Passing this dict to builder.env() ensures workers load the same python_worker.py
+    that the test runner is using.
+
+    Returns an empty dict when appose is installed from PyPI (non-editable), so it
+    is safe to call unconditionally.
+    """
+    import appose
+
+    if "site-packages" not in Path(appose.__file__).parts:
+        return {"PYTHONPATH": str(Path(appose.__file__).parent.parent)}
+    return {}
 
 
 def maybe_debug(service):
