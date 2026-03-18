@@ -290,7 +290,7 @@ def main() -> None:
         numpy_installed = any(
             dist.metadata["Name"] == "numpy" for dist in distributions()
         )
-        if numpy_installed and "numpy" not in globals():
+        if numpy_installed and "numpy" not in sys.modules:
             print(
                 "[WARNING] This environment includes numpy, but numpy was not imported via a service init script.",
                 file=sys.stderr,
