@@ -117,7 +117,7 @@ class Service:
         """
         if self._process is not None:
             # Already started.
-            return
+            return self
 
         prefix = f"Appose-Service-{self._service_id}"
 
