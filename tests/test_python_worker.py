@@ -3,9 +3,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 
-from pathlib import Path
-
-
 import appose
 
 from tests.test_base import source_override

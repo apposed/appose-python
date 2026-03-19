@@ -22,8 +22,7 @@ TEST_RESOURCES: Path = Path(__file__).parent.parent / "resources" / "envs"
 def test_conda():
     """Tests the builder-agnostic API with an environment.yml file."""
     env = (
-        appose
-        .file(str(TEST_RESOURCES / "cowsay.yml"))
+        appose.file(str(TEST_RESOURCES / "cowsay.yml"))
         .base("target/envs/conda-cowsay")
         .log_debug()
         .build()
@@ -35,8 +34,7 @@ def test_conda():
 def test_pixi():
     """Tests building from a pixi.toml file."""
     env = (
-        appose
-        .pixi()
+        appose.pixi()
         .file(str(TEST_RESOURCES / "cowsay-pixi.toml"))
         .base("target/envs/pixi-cowsay")
         .log_debug()
@@ -49,8 +47,7 @@ def test_pixi():
 def test_pixi_builder_api():
     """Tests the programmatic builder API for pixi."""
     env = (
-        appose
-        .pixi()
+        appose.pixi()
         .conda("python>=3.8", "appose")
         .pypi("cowsay==6.1")
         .base("target/envs/pixi-cowsay-builder")
@@ -79,8 +76,7 @@ def test_pixi_appose_requirement():
 
     with pytest.raises(Exception):  # Should raise IllegalStateException equivalent
         (
-            appose
-            .pixi()
+            appose.pixi()
             .conda("python")
             .pypi("cowsay==6.1")
             .base(base)
@@ -92,8 +88,7 @@ def test_pixi_appose_requirement():
 def test_pixi_pyproject():
     """Tests building from a pyproject.toml with pixi config."""
     env = (
-        appose
-        .pixi()
+        appose.pixi()
         .file(str(TEST_RESOURCES / "cowsay-pixi-pyproject.toml"))
         .base("target/envs/pixi-cowsay-pyproject")
         .log_debug()
@@ -119,8 +114,7 @@ cowsay = "==6.1"
 """
 
     env = (
-        appose
-        .pixi()
+        appose.pixi()
         .content(pixi_toml)
         .base("target/envs/pixi-content-test")
         .log_debug()
@@ -144,11 +138,7 @@ dependencies:
 """
 
     env = (
-        appose
-        .content(env_yml)
-        .base("target/envs/content-env-yml")
-        .log_debug()
-        .build()
+        appose.content(env_yml).base("target/envs/content-env-yml").log_debug().build()
     )
 
     assert isinstance(env.builder(), PixiBuilder)
@@ -162,8 +152,7 @@ def test_build_installs_env():
     not only after the first pixi run invocation.
     """
     env = (
-        appose
-        .pixi()
+        appose.pixi()
         .file(str(TEST_RESOURCES / "cowsay-pixi.toml"))
         .base("target/envs/pixi-build-installs-env")
         .log_debug()
@@ -181,8 +170,7 @@ def test_build_installs_env():
 def test_pixi_environment_selection():
     """Tests that .environment() selects a non-default pixi environment."""
     env = (
-        appose
-        .pixi()
+        appose.pixi()
         .file(str(TEST_RESOURCES / "cowsay-multi-env.toml"))
         .base("target/envs/pixi-multi-env")
         .environment("alt")
@@ -220,8 +208,7 @@ cowsay = "==6.1"
 """
 
     env = (
-        appose
-        .content(pixi_toml)
+        appose.content(pixi_toml)
         .base("target/envs/content-pixi-toml")
         .log_debug()
         .build()
