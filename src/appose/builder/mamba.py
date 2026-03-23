@@ -8,6 +8,7 @@ Type-safe builder for Micromamba-based environments.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from . import BaseBuilder, BuildException, Builder, BuilderFactory
@@ -50,30 +51,18 @@ class MambaBuilder(BaseBuilder):
                 f"Cannot use MambaBuilder: environment already managed by uv/venv at {env_dir}",
             )
 
-        # Create Mamba tool instance early so it's available for wrapping
-        mamba = Mamba()
-
-        # Is this env_dir an already-existing conda directory?
-        is_conda_dir = (env_dir / "conda-meta").is_dir()
-        if is_conda_dir:
-            # Environment already exists, just wrap it
-            return self._create_environment(mamba, env_dir)
-
-        # Building a new environment - config content is required
-        if self._content is None:
-            raise BuildException(
-                self, "No source specified for MambaBuilder. Use .file() or .content()"
-            )
-
-        # Infer scheme if not explicitly set
-        if self._scheme is None:
+        # Infer scheme from content if not explicitly set.
+        if self._content is not None and self._scheme is None:
             self._scheme = scheme_from_content(self._content)
 
-        if self._scheme.name() != "environment.yml":
+        if self._scheme is not None and self._scheme.name() != "environment.yml":
             raise BuildException(
                 self,
-                f"MambaBuilder only supports environment.yml scheme, got: {self.scheme}",
+                f"MambaBuilder only supports environment.yml scheme, got: {self._scheme.name()}",
             )
+
+        # Create Mamba tool instance early so it's available for wrapping
+        mamba = Mamba()
 
         # Set up progress/output consumers
         mamba.set_output_consumer(
@@ -104,6 +93,24 @@ class MambaBuilder(BaseBuilder):
         try:
             mamba.install()
 
+            # If the env state matches our current configuration,
+            # skip all package management and return immediately.
+            if self._is_up_to_date(env_dir):
+                return self._create_environment(mamba, env_dir)
+
+            if self._content is None:
+                # No source specified; wrap externally-managed conda env if present.
+                if (env_dir / "conda-meta").is_dir():
+                    return self._create_environment(mamba, env_dir)
+                raise BuildException(
+                    self,
+                    "No source specified for MambaBuilder. Use .file() or .content()",
+                )
+
+            # Wipe existing env directory to avoid conflicts with stale state.
+            if env_dir.exists():
+                shutil.rmtree(env_dir)
+
             # Two-step build: create empty env, write config, then update
             # Step 1: Create empty environment
             mamba.create(env_dir)
@@ -115,6 +122,7 @@ class MambaBuilder(BaseBuilder):
             # Step 3: Update environment from yml
             mamba.update(env_dir, env_yaml)
 
+            self._write_appose_state_file(env_dir)
             return self._create_environment(mamba, env_dir)
 
         except (IOError, KeyboardInterrupt) as e:

@@ -58,6 +58,11 @@ class UvBuilder(BaseBuilder):
     def env_type(self) -> str:
         return "uv"
 
+    def _add_state_fields(self, state: dict) -> None:
+        super()._add_state_fields(state)
+        state["pythonVersion"] = self._python_version
+        state["packages"] = list(self._packages)
+
     def build(self) -> Environment:
         """
         Build the uv environment.
@@ -120,12 +125,15 @@ class UvBuilder(BaseBuilder):
         try:
             uv.install()
 
-            # Check if this is already a uv virtual environment
-            is_uv_venv = (env_dir / "pyvenv.cfg").is_file()
-
-            if is_uv_venv and self._content is None and not self._packages:
-                # Environment already exists and no new config/packages, just use it
+            # If the env state matches our current configuration,
+            # skip all package management and return immediately.
+            if self._is_up_to_date(env_dir):
                 return self._create_environment(env_dir)
+
+            # Determine whether the venv already exists.
+            is_venv_built = (env_dir / "pyvenv.cfg").is_file() or (
+                env_dir / ".venv"
+            ).is_dir()
 
             # Handle source-based build (file or content)
             if self._content is not None:
@@ -144,7 +152,7 @@ class UvBuilder(BaseBuilder):
                 else:
                     # Handle requirements.txt - traditional venv + pip install
                     # Create virtual environment if it doesn't exist
-                    if not is_uv_venv:
+                    if not is_venv_built:
                         uv.create_venv(env_dir, self._python_version)
 
                     # Write requirements.txt to envDir
@@ -155,7 +163,7 @@ class UvBuilder(BaseBuilder):
                     uv.pip_install_from_requirements(env_dir, str(reqs_file.absolute()))
             else:
                 # Programmatic package building
-                if not is_uv_venv:
+                if not is_venv_built:
                     # Create virtual environment
                     uv.create_venv(env_dir, self._python_version)
 
@@ -167,6 +175,7 @@ class UvBuilder(BaseBuilder):
                         all_packages.append("appose")
                     uv.pip_install(env_dir, *all_packages)
 
+            self._write_appose_state_file(env_dir)
             return self._create_environment(env_dir)
 
         except (IOError, KeyboardInterrupt) as e:

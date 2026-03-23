@@ -12,6 +12,7 @@ environments.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -507,6 +508,32 @@ class BaseBuilder(Builder):
         return self
 
     # -- Helper methods --
+
+    def _add_state_fields(self, state: dict) -> None:
+        """Populate state dict for appose.json comparison. Subclasses override, calling super first."""
+        state["content"] = self._content
+        state["scheme"] = self._scheme.name() if self._scheme is not None else None
+        state["channels"] = list(self._channels)
+        state["flags"] = list(self._flags)
+        state["envVars"] = dict(sorted(self._env_vars.items()))
+
+    def _build_state_string(self) -> str:
+        """Build deterministic JSON string of current builder state."""
+        state: dict = {"builder": self.env_type()}
+        self._add_state_fields(state)
+        return json.dumps(state, separators=(",", ":"))
+
+    def _is_up_to_date(self, env_dir: Path) -> bool:
+        """Returns True if appose.json matches current builder state."""
+        appose_json = env_dir / "appose.json"
+        if not appose_json.is_file():
+            return False
+        return appose_json.read_text(encoding="utf-8") == self._build_state_string()
+
+    def _write_appose_state_file(self, env_dir: Path) -> None:
+        """Write current builder state to appose.json after a successful build."""
+        appose_json = env_dir / "appose.json"
+        appose_json.write_text(self._build_state_string(), encoding="utf-8")
 
     def _resolve_env_dir(self) -> Path:
         """Determine the environment directory path."""

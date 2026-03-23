@@ -87,10 +87,7 @@ def test_wrap_uv():
             "uv environment should have no special launcher"
         )
     finally:
-        if pyvenv_cfg.exists():
-            pyvenv_cfg.unlink()
-        if uv_dir.exists():
-            uv_dir.rmdir()
+        delete_recursively(uv_dir)
 
 
 def test_wrap_custom():
