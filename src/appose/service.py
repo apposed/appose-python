@@ -19,6 +19,8 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from .syntax import ScriptSyntax, get as syntax_from_name
+
+_WORKER_STARTUP_TIMEOUT = 60  # seconds
 from .util import process
 from .util.message import Args, decode, encode, proxify_worker_objects
 
@@ -102,6 +104,19 @@ class Service:
         self._init_script = script
         return self
 
+    def env(self, **vars: str) -> "Service":
+        """
+        Set environment variables to pass to the worker process.
+
+        Args:
+            **vars: Key/value pairs to add to the worker's environment.
+
+        Returns:
+            This service object, for chaining method calls.
+        """
+        self._env_vars.update(vars)
+        return self
+
     def start(self) -> "Service":
         """
         Explicitly launch the worker process associated with this service.
@@ -147,6 +162,25 @@ class Service:
         self._stdout_thread.start()
         self._stderr_thread.start()
         self._monitor_thread.start()
+
+        if self._syntax is not None:
+            # Run a canary task to verify the worker is alive and responsive.
+            # Uses the existing task protocol, so works with any worker version.
+            try:
+                self.task(self._syntax.canary_script()).wait_for(
+                    timeout=_WORKER_STARTUP_TIMEOUT
+                )
+            except TaskException as e:
+                details = "\n".join(self._error_lines)
+                raise RuntimeError(
+                    "Worker startup canary failed."
+                    + (f"\n{details}" if details else "")
+                ) from e
+            except TimeoutError:
+                raise TimeoutError(
+                    f"Worker did not become ready within {_WORKER_STARTUP_TIMEOUT} seconds."
+                )
+
         return self
 
     def task(
@@ -467,7 +501,7 @@ class Service:
         self._debug_callback(f"[{prefix}-{self._service_id}] {message}")
 
     def __enter__(self) -> "Service":
-        return self
+        return self.start()
 
     def __exit__(self, exc_type, exc_value, exc_tb) -> None:
         self.close()
@@ -599,15 +633,19 @@ class Task:
 
             self.listeners.append(listener)
 
-    def wait_for(self) -> "Task":
+    def wait_for(self, timeout: float | None = None) -> "Task":
         """
         Wait for this task to complete.
+
+        Args:
+            timeout: Optional maximum number of seconds to wait.
 
         Returns:
             This task (for method chaining).
 
         Raises:
             TaskException: If the task fails, is canceled, or crashes.
+            TimeoutError: If the timeout expires before the task completes.
         """
         with self.cv:
             if self.status == TaskStatus.INITIAL:
@@ -619,7 +657,12 @@ class Task:
                     self._raise_if_failed()
                 return self
 
-            self.cv.wait()
+            self.cv.wait(timeout=timeout)
+
+        if timeout is not None and not self.status.is_finished():
+            raise TimeoutError(
+                f"Task did not complete within {timeout} seconds."
+            )
 
         # After waiting, check if task failed
         self._raise_if_failed()

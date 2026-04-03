@@ -106,7 +106,7 @@ def cowsay_and_assert(env: Environment, greeting: str):
         env: The environment to execute in
         greeting: The greeting to pass to cowsay
     """
-    with env.python() as service:
+    with env.python().env(**source_override()) as service:
         maybe_debug(service)
         task = service.task(
             f"import cowsay\ncowsay.get_output_string('cow', '{greeting}')\n"

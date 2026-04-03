@@ -106,6 +106,16 @@ class ScriptSyntax(ABC):
         """
         ...
 
+    def canary_script(self) -> str:
+        """
+        Return a trivial script whose successful completion confirms the worker
+        is alive and responsive. Used by Service.start() as a startup canary.
+
+        The default implementation returns a string literal expression that
+        evaluates to "ready". Subclasses may override for language-specific needs.
+        """
+        return '"ready"'
+
     @abstractmethod
     def get_attributes(self, object_var_name: str) -> str:
         """
