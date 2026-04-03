@@ -47,10 +47,12 @@ class Service:
     _service_count: int = 0
 
     def __init__(
-        self, cwd: str | Path, env_vars: dict[str, str] | None = None, *args: str
+        self, cwd: str | Path, env_vars: dict[str, str | None] | None = None, *args: str
     ) -> None:
         self._cwd: Path = Path(cwd)
-        self._env_vars: dict[str, str] = env_vars.copy() if env_vars is not None else {}
+        self._env_vars: dict[str, str | None] = (
+            env_vars.copy() if env_vars is not None else {}
+        )
         self._args: list[str] = list(args)
         self._tasks: dict[str, "Task"] = {}
         self._service_id: int = Service._service_count
@@ -100,6 +102,20 @@ class Service:
         if self._process is not None:
             raise RuntimeError("Service already started")
         self._init_script = script
+        return self
+
+    def env(self, **vars: str | None) -> "Service":
+        """
+        Set environment variables to pass to the worker process.
+
+        Args:
+            **vars: Key/value pairs to add to the worker's environment.
+                A value of None causes the variable to be unset in the worker.
+
+        Returns:
+            This service object, for chaining method calls.
+        """
+        self._env_vars.update(vars)
         return self
 
     def start(self) -> "Service":

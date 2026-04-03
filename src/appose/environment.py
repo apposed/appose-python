@@ -146,7 +146,17 @@ class Environment:
             "-c",
             "import appose.python_worker; appose.python_worker.main()",
         ]
-        return self.service(python_exes, *python_args).syntax(PythonSyntax())
+        # NB: Unset conda/mamba variables so they don't bleed into the worker
+        # process and cause the wrong Python interpreter to be resolved.
+        # Only clear variables not explicitly set by the caller via env().
+        conda_vars = ("CONDA_PREFIX", "CONDA_DEFAULT_ENV", "CONDA_SHLVL")
+        explicit = self.env_vars()
+        conda_unset = {var: None for var in conda_vars if var not in explicit}
+        return (
+            self.service(python_exes, *python_args)
+            .syntax(PythonSyntax())
+            .env(**conda_unset)
+        )
 
     def groovy(
         self,
