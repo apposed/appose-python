@@ -37,6 +37,22 @@ class MessageTest(unittest.TestCase):
             "}"
         "}"
     )
+
+    JSON_WITH_DIMS = (
+        "{"
+            '"ndArray":{'
+                '"appose_type":"ndarray",'
+                '"dtype":"float32",'
+                '"shape":[2,20,25],'
+                '"dims":["z","y","x"],'
+                '"shm":{'
+                    '"appose_type":"shm",'
+                    '"name":"SHM_NAME",'
+                    '"rsize":4000'
+                "}"
+            "}"
+        "}"
+    )
     # fmt: on
 
     STRING: str = (
@@ -78,6 +94,14 @@ class MessageTest(unittest.TestCase):
             expected = self.JSON.replace("SHM_NAME", shm_name)
             self.assertEqual(expected, json_str)
 
+    def test_encode_with_dims(self):
+        with appose.NDArray("float32", [2, 20, 25], dims=["z", "y", "x"]) as ndarray:
+            shm_name = ndarray.shm.name
+            data = {"ndArray": ndarray}
+            json_str = message.encode(data)
+            expected = self.JSON_WITH_DIMS.replace("SHM_NAME", shm_name)
+            self.assertEqual(expected, json_str)
+
     def test_decode(self):
         with appose.SharedMemory(create=True, rsize=4000) as shm:
             shm_name = shm.name
@@ -105,3 +129,34 @@ class MessageTest(unittest.TestCase):
             ndArray = data["ndArray"]
             self.assertEqual("float32", ndArray.dtype)
             self.assertEqual([2, 20, 25], ndArray.shape)
+            self.assertIsNone(ndArray.dims)
+
+    def test_decode_with_dims(self):
+        with appose.SharedMemory(create=True, rsize=4000) as shm:
+            shm_name = shm.name
+            data = message.decode(self.JSON_WITH_DIMS.replace("SHM_NAME", shm_name))
+            ndArray = data["ndArray"]
+            self.assertEqual("float32", ndArray.dtype)
+            self.assertEqual([2, 20, 25], ndArray.shape)
+            self.assertEqual(["z", "y", "x"], ndArray.dims)
+
+    def test_decode_ignores_unknown_fields(self):
+        """Verify backward compatibility: unknown fields are silently ignored."""
+        json_str = (
+            '{"ndArray":{'
+            '"appose_type":"ndarray",'
+            '"dtype":"uint8",'
+            '"shape":[10],'
+            '"future_field":"hello",'
+            '"shm":{'
+            '"appose_type":"shm",'
+            '"name":"SHM_NAME",'
+            '"rsize":10'
+            "}}}"
+        )
+        with appose.SharedMemory(create=True, rsize=10) as shm:
+            data = message.decode(json_str.replace("SHM_NAME", shm.name))
+            ndArray = data["ndArray"]
+            self.assertEqual("uint8", ndArray.dtype)
+            self.assertEqual([10], ndArray.shape)
+            self.assertIsNone(ndArray.dims)

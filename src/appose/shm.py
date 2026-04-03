@@ -119,7 +119,13 @@ class NDArray:
     a particular shape, and flattened into SharedMemory.
     """
 
-    def __init__(self, dtype: str, shape: list[int], shm: SharedMemory | None = None):
+    def __init__(
+        self,
+        dtype: str,
+        shape: list[int],
+        shm: SharedMemory | None = None,
+        dims: list[str] | None = None,
+    ):
         """
         Create an NDArray.
 
@@ -128,9 +134,16 @@ class NDArray:
             shape: The dimensional extents; e.g. a stack of 7 image planes
                 with resolution 512x512 would have shape [7, 512, 512].
             shm: The SharedMemory containing the array data, or None to create it.
+            dims: Optional labels for each dimensional axis; e.g. ["z", "y", "x"].
+                Must have the same length as shape if provided.
         """
+        if dims is not None and len(dims) != len(shape):
+            raise ValueError(
+                f"dims length ({len(dims)}) must match shape length ({len(shape)})"
+            )
         self.dtype: str = dtype
         self.shape: list[int] = shape
+        self.dims: list[str] | None = dims
         self.shm: SharedMemory = (
             SharedMemory(
                 create=True, rsize=ceil(prod(shape) * _bytes_per_element(dtype))
@@ -140,12 +153,14 @@ class NDArray:
         )
 
     def __str__(self):
-        return (
-            f"NDArray("
-            f"dtype='{self.dtype}', "
-            f"shape={self.shape}, "
-            f"shm='{self.shm.name}' ({self.shm.rsize}))"
-        )
+        parts = [
+            f"dtype='{self.dtype}'",
+            f"shape={self.shape}",
+        ]
+        if self.dims is not None:
+            parts.append(f"dims={self.dims}")
+        parts.append(f"shm='{self.shm.name}' ({self.shm.rsize})")
+        return f"NDArray({', '.join(parts)})"
 
     def ndarray(self):
         """
@@ -162,6 +177,20 @@ class NDArray:
         except ModuleNotFoundError:
             raise ImportError("NumPy is not available.")
 
+    def xarray(self):
+        """
+        Create an xarray DataArray for working with the array data.
+        No array data is copied; the DataArray wraps the same SharedMemory
+        via a NumPy array view. Dimensional axis labels (dims) are preserved.
+        Requires the numpy and xarray packages to be installed.
+        """
+        try:
+            import xarray
+
+            return xarray.DataArray(data=self.ndarray(), dims=self.dims)
+        except ModuleNotFoundError:
+            raise ImportError("xarray is not available.")
+
     def __enter__(self) -> "NDArray":
         return self
 
@@ -175,11 +204,21 @@ message.register(
     lambda shm: {"name": shm.name, "rsize": shm.rsize},
     lambda m: SharedMemory(name=m["name"], rsize=m["rsize"]),
 )
+
+
+def _encode_ndarray(nda):
+    d = {"dtype": nda.dtype, "shape": nda.shape}
+    if nda.dims is not None:
+        d["dims"] = nda.dims
+    d["shm"] = nda.shm
+    return d
+
+
 message.register(
     NDArray,
     "ndarray",
-    lambda nda: {"dtype": nda.dtype, "shape": nda.shape, "shm": nda.shm},
-    lambda m: NDArray(m["dtype"], m["shape"], m["shm"]),
+    _encode_ndarray,
+    lambda m: NDArray(m["dtype"], m["shape"], m["shm"], dims=m.get("dims")),
 )
 
 
