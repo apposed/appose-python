@@ -149,7 +149,12 @@ class Environment:
         # NB: Unset conda/mamba variables so they don't bleed into the worker
         # process and cause the wrong Python interpreter to be resolved.
         # Only clear variables not explicitly set by the caller via env().
-        conda_vars = ("CONDA_PREFIX", "CONDA_DEFAULT_ENV", "CONDA_SHLVL")
+        conda_vars = (
+            "CONDA_PREFIX",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_SHLVL",
+            "PYTHONEXECUTABLE",
+        )
         explicit = self.env_vars()
         conda_unset = {var: None for var in conda_vars if var not in explicit}
         return (
