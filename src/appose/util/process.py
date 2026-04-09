@@ -33,7 +33,11 @@ def builder(
     """
     env = os.environ.copy()
     if env_vars:
-        env.update(env_vars)
+        for key, value in env_vars.items():
+            if value is None:
+                env.pop(key, None)
+            else:
+                env[key] = value
 
     cwd = str(working_dir) if working_dir else None
 
