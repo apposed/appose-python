@@ -585,9 +585,6 @@ class Task:
             self.inputs.update(inputs)
         self.outputs: Args = {}
         self.status: TaskStatus = TaskStatus.INITIAL
-        self.message: str | None = None
-        self.current: int = 0
-        self.maximum: int = 1
         self.error: str | None = None
         self.listeners: list[Callable[["TaskEvent"], None]] = []
         self.cv: threading.Condition = threading.Condition()
