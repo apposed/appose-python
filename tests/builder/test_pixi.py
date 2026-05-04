@@ -167,29 +167,29 @@ def test_build_installs_env():
     cowsay_and_assert(env, "installed")
 
 
-def test_pixi_environment_selection():
-    """Tests that .environment() selects a non-default pixi environment."""
+def test_pixi_activate():
+    """Tests that env.activate() launches a service in a non-default pixi environment."""
     env = (
         appose.pixi()
         .file(str(TEST_RESOURCES / "cowsay-multi-env.toml"))
         .base("target/envs/pixi-multi-env")
-        .environment("alt")
         .log_debug()
         .build()
     )
     assert isinstance(env.builder(), PixiBuilder)
+    alt_env = env.activate("alt")
     # Verify launch args include --environment alt
-    launch_args = env.launch_args()
+    launch_args = alt_env.launch_args()
     assert "--environment" in launch_args, "launch_args should contain --environment"
     idx = launch_args.index("--environment")
     assert launch_args[idx + 1] == "alt"
     # Verify bin path resolves to the alt environment directory
     import os
 
-    assert os.sep + "alt" + os.sep in env.bin_paths()[0], (
+    assert os.sep + "alt" + os.sep in alt_env.bin_paths()[0], (
         "bin_paths should reference the alt environment"
     )
-    cowsay_and_assert(env, "multi-env")
+    cowsay_and_assert(alt_env, "multi-env")
 
 
 def test_content_pixi_toml():

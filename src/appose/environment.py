@@ -83,6 +83,28 @@ class Environment:
         builder = self.builder()
         return builder.env_type() if builder else "unknown"
 
+    def activate(self, name: str) -> Environment:
+        """
+        Return a new Environment targeting a named sub-environment.
+
+        For pixi projects this installs (if needed) and activates the named
+        pixi environment, equivalent to ``pixi run --environment <name>``.
+        The returned Environment is fully ready to launch services.
+
+        Args:
+            name: The sub-environment name (e.g. ``"gpu"``, ``"shiny"``).
+
+        Returns:
+            A new Environment configured for the named sub-environment.
+
+        Raises:
+            NotImplementedError: If this environment type does not support
+                named sub-environments.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support named sub-environments"
+        )
+
     def rebuild(self) -> Environment:
         """
         Rebuilds this environment from scratch.

@@ -560,7 +560,11 @@ class BaseBuilder(Builder):
         raise ValueError("Cannot determine scheme: neither scheme nor content is set")
 
     def _create_env(
-        self, base: str, bin_paths: list[str], launch_args: list[str]
+        self,
+        base: str,
+        bin_paths: list[str],
+        launch_args: list[str],
+        activator: Callable[[str], Environment] | None = None,
     ) -> Environment:
         """
         Create an Environment with the given configuration.
@@ -569,6 +573,7 @@ class BaseBuilder(Builder):
             base: The base directory path
             bin_paths: List of binary directories to search
             launch_args: Launch arguments to prepend to worker commands
+            activator: Optional callable implementing ``activate(name)``
 
         Returns:
             A new Environment instance
@@ -584,12 +589,14 @@ class BaseBuilder(Builder):
                 launch_args: list[str],
                 env_vars: dict[str, str],
                 builder: Builder,
+                activator: Callable[[str], Environment] | None,
             ):
                 super().__init__(base_path)
                 self._bin_paths: list[str] = bin_paths
                 self._launch_args: list[str] = launch_args
                 self._env_vars: dict[str, str] = env_vars
                 self._builder: Builder = builder
+                self._activator = activator
 
             def bin_paths(self) -> list[str]:
                 return self._bin_paths
@@ -603,7 +610,16 @@ class BaseBuilder(Builder):
             def builder(self) -> Builder:
                 return self._builder
 
-        return BuiltEnvironment(base, bin_paths, launch_args, self._env_vars, self)
+            def activate(self, name: str) -> Environment:
+                if self._activator is None:
+                    raise NotImplementedError(
+                        f"{type(self).__name__} does not support named sub-environments"
+                    )
+                return self._activator(name)
+
+        return BuiltEnvironment(
+            base, bin_paths, launch_args, self._env_vars, self, activator
+        )
 
 
 class SimpleBuilder(BaseBuilder):
