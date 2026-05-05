@@ -41,10 +41,14 @@ jobs:
 
     - name: Run the tests
       shell: bash
+      env:
+        UV_PYTHON: ${{ matrix.python-version }}
       run: |
         bin/test.sh
 
     - name: Lint the code
       shell: bash
+      env:
+        UV_PYTHON: ${{ matrix.python-version }}
       run: |
         bin/lint.sh
