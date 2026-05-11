@@ -4,4 +4,6 @@
 
 """Version information for Appose."""
 
-__version__ = "0.7.3.dev0"
+from importlib.metadata import version
+
+__version__ = version("appose")
