@@ -83,6 +83,7 @@ Here is an example using a few more of Appose's features:
 
 ```python
 import appose
+from appose.service import ResponseType
 from time import sleep
 
 golden_ratio_in_groovy = """
