@@ -1,3 +1,27 @@
+# Appose Python CI Build
+#
+# Caching Strategy:
+# 1. Maven dependencies (via setup-java cache: 'maven')
+# 2. Appose environments and tool binaries (~/.local/share/appose)
+#    - Includes pixi, uv, and micromamba executables
+#    - Includes built environments
+# 3. Pixi package cache (rattler cache):
+#    - Linux: ~/.cache/rattler/cache
+#    - macOS: ~/Library/Caches/rattler/cache
+#    - Windows: ~/AppData/Local/rattler/cache
+# 4. uv package cache:
+#    - Linux: ~/.cache/uv
+#    - macOS: ~/Library/Caches/uv
+#    - Windows: ~/AppData/Local/uv/cache
+# 5. Micromamba package cache:
+#    - All platforms: ~/.local/share/mamba/pkgs and ~/.mamba/pkgs
+#
+# Cache keys are based on:
+# - tests/resources/envs/* hash (test environment specs change)
+# - uv.lock hash (package dependencies change)
+#
+# This prevents redundant downloads of ~100MB+ tool binaries and packages on every CI run.
+
 name: build
 
 on:
@@ -14,6 +38,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.10", "3.13"]
@@ -38,6 +63,50 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install uv
+
+    - name: Cache Appose environments and tools
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/share/appose
+        key: ${{ runner.os }}-appose-py${{ matrix.python-version }}-${{ hashFiles('tests/resources/envs/**') }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-appose-py${{ matrix.python-version }}-${{ hashFiles('tests/resources/envs/**') }}-
+          ${{ runner.os }}-appose-py${{ matrix.python-version }}-
+          ${{ runner.os }}-appose-
+
+    - name: Cache Pixi packages (Rattler cache)
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/rattler/cache
+          ~/Library/Caches/rattler/cache
+          ~/AppData/Local/rattler/cache
+        key: ${{ runner.os }}-pixi-pkgs-${{ hashFiles('tests/resources/envs/**') }}
+        restore-keys: |
+          ${{ runner.os }}-pixi-pkgs-
+
+    - name: Cache uv packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/uv
+          ~/Library/Caches/uv
+          ~/AppData/Local/uv/cache
+        key: ${{ runner.os }}-uv-pkgs-${{ hashFiles('tests/resources/envs/**', 'uv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-uv-pkgs-
+
+    - name: Cache Micromamba packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.local/share/mamba/pkgs
+          ~/.mamba/pkgs
+          ~/AppData/Roaming/.mamba/pkgs
+          ~/AppData/Roaming/mamba/pkgs
+        key: ${{ runner.os }}-mamba-pkgs-${{ hashFiles('tests/resources/envs/**') }}
+        restore-keys: |
+          ${{ runner.os }}-mamba-pkgs-
 
     - name: Run the tests
       shell: bash
