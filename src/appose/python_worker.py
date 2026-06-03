@@ -222,8 +222,15 @@ class Worker:
                 else:
                     # Create a thread and save a reference to it, in case its script
                     # kills the thread. This happens e.g. if it calls sys.exit.
-                    task._thread = Thread(target=task._run, name=f"Appose-{uuid}")
-                    task._thread.start()
+                    #
+                    # Assign task._thread only AFTER start() returns. Otherwise the
+                    # janitor (_cleanup_threads) can observe task._thread set while
+                    # the thread is not yet alive (the window between Thread()
+                    # construction and start()) and spuriously fail the task with
+                    # "thread death". See apposed/appose#15.
+                    t = Thread(target=task._run, name=f"Appose-{uuid}")
+                    t.start()
+                    task._thread = t
 
             elif request_type == RequestType.CANCEL:
                 task = self.tasks.get(uuid)
