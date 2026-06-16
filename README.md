@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/apposed/appose-python/actions/workflows/build.yml/badge.svg)](https://github.com/apposed/appose-python/actions/workflows/build.yml)
 
-> [!NOTE]
+> [!TIP]
 > **QUICK START:** [Appose Workshop](https://fiji.github.io/i2k-2025-appose/)
 
 |   |   |
