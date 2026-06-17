@@ -1,5 +1,8 @@
 # Appose Python
 
+[![License](https://img.shields.io/pypi/l/appose.svg)](https://github.com/apposed/appose-python/raw/main/LICENSE.txt)
+[![PyPI](https://img.shields.io/pypi/v/appose.svg)](https://pypi.org/project/appose)
+[![Python Version](https://img.shields.io/pypi/pyversions/appose.svg)](https://python.org)
 [![Build Status](https://github.com/apposed/appose-python/actions/workflows/build.yml/badge.svg)](https://github.com/apposed/appose-python/actions/workflows/build.yml)
 
 > [!TIP]
