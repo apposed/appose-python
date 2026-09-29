@@ -45,7 +45,7 @@ class Pixi(Tool):
     """
 
     # Pixi version to download
-    PIXI_VERSION: str = "v0.58.0"
+    PIXI_VERSION: str = "v0.81.0"
 
     # Path where Appose installs Pixi by default (.pixi subdirectory thereof)
     BASE_PATH: str = environment.appose_envs_dir()
