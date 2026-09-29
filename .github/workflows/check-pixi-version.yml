@@ -1,0 +1,72 @@
+# Checks whether a newer pixi release is available than the one pinned in
+# src/appose/tool/pixi.py, and if so, opens a pull request to bump the pin.
+#
+# The build.yml workflow then exercises the bump the normal way, via its
+# pull_request trigger against main.
+
+name: check-pixi-version
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-pixi-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest pixi release
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          latest=$(gh api repos/prefix-dev/pixi/releases/latest --jq .tag_name)
+          if [ -z "$latest" ]; then
+            echo "Failed to determine latest pixi release" >&2
+            exit 1
+          fi
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Get currently pinned pixi version
+        id: current
+        run: |
+          current=$(grep -oP 'PIXI_VERSION: str = "\K[^"]+' src/appose/tool/pixi.py)
+          if [ -z "$current" ]; then
+            echo "Failed to determine currently pinned pixi version" >&2
+            exit 1
+          fi
+          echo "version=$current" >> "$GITHUB_OUTPUT"
+
+      - name: Update pinned pixi version
+        if: steps.latest.outputs.version != steps.current.outputs.version
+        run: |
+          sed -i \
+            "s/PIXI_VERSION: str = \"${{ steps.current.outputs.version }}\"/PIXI_VERSION: str = \"${{ steps.latest.outputs.version }}\"/" \
+            src/appose/tool/pixi.py
+
+      - name: Create pull request
+        if: steps.latest.outputs.version != steps.current.outputs.version
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Bump pinned pixi version to ${{ steps.latest.outputs.version }}"
+          title: "Bump pinned pixi version to ${{ steps.latest.outputs.version }}"
+          body: |
+            Automated update from the `check-pixi-version` workflow.
+
+            - Currently pinned version: `${{ steps.current.outputs.version }}`
+            - Latest pixi release: `${{ steps.latest.outputs.version }}`
+
+            [Release notes](https://github.com/prefix-dev/pixi/releases/tag/${{ steps.latest.outputs.version }})
+
+            Please wait for CI to pass, and check the release notes for
+            breaking changes, before merging.
+          branch: bump-pixi-version-auto
+          delete-branch: true
