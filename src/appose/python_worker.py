@@ -19,9 +19,10 @@ import ast
 import os
 import sys
 import traceback
-from threading import Thread
+from threading import Event, Lock, Thread
 from time import sleep
 from typing import Any
+from uuid import uuid4
 
 # NB: Avoid relative imports so that this script can be run standalone.
 from appose.service import RequestType, ResponseType
@@ -156,9 +157,8 @@ class Task:
         if args is not None:
             response.update(args)
         response.update({"task": self._uuid, "responseType": response_type.value})
-        # NB: Flush is necessary to ensure service receives the data!
         try:
-            print(message.encode(response), flush=True)
+            self._worker._send(response)
         except BaseException:  # noqa: BLE001 -- any encoding failure must still reach the caller
             if already_terminated:
                 # An exception triggered a failure response which
@@ -171,11 +171,27 @@ class Task:
             self.fail(traceback.format_exc())
 
 
+class _PendingCall:
+    """
+    A call from this worker into a service object, awaiting the service's reply.
+    """
+
+    def __init__(self) -> None:
+        self.event = Event()
+        self.reply: Args | None = None
+
+    def resolve(self, reply: Args) -> None:
+        self.reply = reply
+        self.event.set()
+
+
 class Worker:
     def __init__(self):
         self.tasks: dict[str, Task] = {}
         self.queue: list[Task] = []
         self.exports: dict[str, Any] = {}
+        self.calls: dict[str, _PendingCall] = {}
+        self._stdout_lock = Lock()
 
         # Flag this process as a worker, not a service.
         message._worker_mode = True
@@ -198,6 +214,61 @@ class Worker:
             task = self.queue.pop()
             task._run()
 
+    def _send(self, response: Args) -> None:
+        """
+        Send a message to the service.
+        """
+        encoded = message.encode(response)
+        # NB: Messages may be sent from multiple threads, and must not interleave.
+        with self._stdout_lock:
+            # NB: Flush is necessary to ensure service receives the data!
+            print(encoded, flush=True)
+
+    def _invoke(
+        self, var: str, op: str, name: str | None = None, args: list | None = None
+    ) -> Any:
+        """
+        Perform an operation on an object living in the service process,
+        blocking until the service replies with the outcome.
+
+        Args:
+            var: The name of the exported service object.
+            op: The operation: "get" (attribute), "call", or "dir".
+            name: The attribute name, for "get" operations.
+            args: The arguments, for "call" operations.
+
+        Returns:
+            The result of the operation.
+
+        Raises:
+            RuntimeError: If the operation fails in the service process.
+        """
+        call_id = uuid4().hex
+        pending = _PendingCall()
+        self.calls[call_id] = pending
+        request = {
+            "responseType": ResponseType.CALL.value,
+            "call": call_id,
+            "var": var,
+            "op": op,
+        }
+        if name is not None:
+            request["name"] = name
+        if args is not None:
+            request["args"] = args
+        try:
+            if not getattr(self, "running", True):
+                raise RuntimeError("Service connection closed")
+            self._send(request)
+        except BaseException:
+            self.calls.pop(call_id, None)
+            raise
+        pending.event.wait()
+        reply = pending.reply or {}
+        if "error" in reply:
+            raise RuntimeError(reply["error"])
+        return reply.get("result")
+
     def _process_input(self) -> None:
         while True:
             try:
@@ -206,6 +277,11 @@ class Worker:
                 line = None
             if not line:
                 self.running = False
+                # Release any threads still awaiting replies from the service.
+                for call_id in list(self.calls):
+                    pending = self.calls.pop(call_id, None)
+                    if pending is not None:
+                        pending.resolve({"error": "Service connection closed"})
                 return
 
             request = message.decode(line)
@@ -233,6 +309,14 @@ class Worker:
                     t = Thread(target=task._run, name=f"Appose-{uuid}")
                     t.start()
                     task._thread = t
+
+            elif request_type == RequestType.REPLY:
+                call_id = request.get("call")
+                pending = self.calls.pop(call_id, None)
+                if pending is None:
+                    print(f"No such call: {call_id}", file=sys.stderr)
+                    continue
+                pending.resolve(request)
 
             elif request_type == RequestType.CANCEL:
                 task = self.tasks.get(uuid)

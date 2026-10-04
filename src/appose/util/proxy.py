@@ -142,3 +142,53 @@ def create(service: Service, var: str, queue: str | None = None) -> Any:
                 raise RuntimeError(str(e)) from e
 
     return ProxyObject(service, var, queue)  # type: ignore
+
+
+class ServiceProxy:
+    """
+    A proxy object, living in a worker process, that provides access to a
+    remote object living in the calling (service) process.
+
+    This is the mirror image of the ProxyObject returned by create(): instead
+    of the service reaching into the worker, the worker reaches back into the
+    service. Each attribute access, call, or dir() on the proxy sends a CALL
+    message to the service, then blocks until the service sends a REPLY.
+
+    Service proxies are created automatically: when a task input is not
+    JSON-serializable, the service exports it and the worker receives a
+    ServiceProxy in its place. For example, on the service side:
+
+        task = python.task("image.read_tile(0, 0, buffer)", inputs={
+            "image": my_virtual_image,  # Not JSON-serializable -> proxied.
+            "buffer": ndarray,  # Shared memory -> passed by reference.
+        })
+
+    Like ProxyObject, attribute values that are not JSON-serializable come
+    back as further ServiceProxy instances, so chaining works naturally.
+    And passing a ServiceProxy back to the service (as a call argument or
+    task output) yields the original service object again.
+
+    Error handling: If the remote operation fails, a RuntimeError is raised
+    containing the error message from the service.
+    """
+
+    def __init__(self, worker: Any, var: str):
+        self._worker = worker
+        self._var = var
+
+    def __getattr__(self, name: str):
+        if name.startswith("__") and name.endswith("__"):
+            # Note: Libraries probe for dunder attributes via getattr/hasattr
+            # (e.g. numpy's __array_interface__), and Python never looks up
+            # special methods via __getattr__ anyway, so don't forward these.
+            raise AttributeError(name)
+        return self._worker._invoke(self._var, "get", name=name)
+
+    def __call__(self, *args):
+        return self._worker._invoke(self._var, "call", args=list(args))
+
+    def __dir__(self):
+        return self._worker._invoke(self._var, "dir")
+
+    def __repr__(self):
+        return f"ServiceProxy({self._var!r})"

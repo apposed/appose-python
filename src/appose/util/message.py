@@ -9,7 +9,7 @@ Utility functions for encoding and decoding messages.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 Args = dict[str, Any]
 
@@ -49,8 +49,19 @@ _proxy_counter = 0
 _worker_instance = None
 
 
-def encode(data: Args) -> str:
-    return json.dumps(data, cls=_ApposeJSONEncoder, separators=(",", ":"))
+def encode(data: Args, exporter: Callable[[Any], Args] | None = None) -> str:
+    """
+    Encode the given data as a single line of JSON.
+
+    Args:
+        data: The data to encode.
+        exporter: Optional function to call for objects that are not
+            JSON-serializable. It must return a JSON-serializable
+            reference to the object (e.g. a service_object dict).
+    """
+    return json.dumps(
+        data, cls=_ApposeJSONEncoder, separators=(",", ":"), exporter=exporter
+    )
 
 
 def decode(the_json: str) -> Args:
@@ -58,10 +69,24 @@ def decode(the_json: str) -> Args:
 
 
 class _ApposeJSONEncoder(json.JSONEncoder):
+    def __init__(self, *args, exporter=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._exporter = exporter
+
     def default(self, obj):
         for obj_type, (appose_type, encoder) in _encoders.items():
             if isinstance(obj, obj_type):
                 return {"appose_type": appose_type, **encoder(obj)}
+
+        # A proxy to a service object travels back as a reference to it,
+        # rather than being wrapped in another layer of proxying.
+        from .proxy import ServiceProxy
+
+        if isinstance(obj, ServiceProxy):
+            return {"appose_type": "service_object", "var_name": obj._var}
+
+        if self._exporter is not None:
+            return self._exporter(obj)
 
         # If in worker mode and object is not JSON-serializable,
         # auto-export it and return a worker_object reference.
@@ -88,6 +113,16 @@ def _appose_object_hook(obj: dict):
         # Keep worker_object dicts as-is for now.
         # They will be converted to proxies by proxify_worker_objects().
         return obj
+    if atype == "service_object":
+        if _worker_mode and _worker_instance is not None:
+            # Worker side: wrap the reference in a proxy that forwards
+            # attribute accesses and calls back to the service.
+            from .proxy import ServiceProxy
+
+            return ServiceProxy(_worker_instance, obj["var_name"])
+        # Service side: keep service_object dicts as-is for now.
+        # They will be resolved by proxify_worker_objects().
+        return obj
     if atype in _decoders:
         return _decoders[atype](obj)
     return obj
@@ -95,17 +130,21 @@ def _appose_object_hook(obj: dict):
 
 def proxify_worker_objects(data: Any, service: Any) -> Any:
     """
-    Recursively convert worker_object dicts to ProxyObject instances.
+    Recursively convert worker_object dicts to ProxyObject instances,
+    and service_object dicts back to the service objects they reference.
 
-    This is called on task outputs after JSON deserialization to convert
-    any worker_object references into actual proxy objects.
+    This is called on task outputs and on worker calls after JSON
+    deserialization to convert any worker_object references into actual
+    proxy objects.
 
     Args:
-        data: The data structure (potentially) containing worker_object dicts.
+        data: The data structure (potentially) containing worker_object
+            and/or service_object dicts.
         service: The Service instance to use for creating proxies.
 
     Returns:
-        The data with worker_object dicts replaced by ProxyObject instances.
+        The data with worker_object dicts replaced by ProxyObject instances,
+        and service_object dicts replaced by the original service objects.
     """
     if isinstance(data, dict):
         if data.get("appose_type") == "worker_object":
@@ -114,6 +153,9 @@ def proxify_worker_objects(data: Any, service: Any) -> Any:
 
             var_name = data["var_name"]
             return create(service, var_name, queue=None)
+        elif data.get("appose_type") == "service_object":
+            # Resolve this service_object dict to the object it references.
+            return service._exports[data["var_name"]]
         else:
             # Recursively process dict values.
             return {k: proxify_worker_objects(v, service) for k, v in data.items()}

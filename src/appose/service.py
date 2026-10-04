@@ -70,6 +70,10 @@ class Service:
         self._debug_callback: Callable[[str], Any] | None = None
         self._init_script: str | None = None
         self._syntax: ScriptSyntax | None = None
+        self._exports: dict[str, Any] = {}
+        self._export_count: int = 0
+        self._exports_lock: threading.Lock = threading.Lock()
+        self._stdin_lock: threading.Lock = threading.Lock()
 
     def debug(self, debug_callback: Callable[[str], Any]) -> Service:
         """
@@ -413,6 +417,17 @@ class Service:
             try:
                 response = decode(line)
                 self._debug_service(line)  # Echo the line to the debug listener.
+                if response.get("responseType") == ResponseType.CALL.value:
+                    # The worker is calling back into a service object.
+                    # Handle it on its own thread, so that this loop stays
+                    # free to process other responses in the meantime.
+                    threading.Thread(
+                        target=self._handle_call,
+                        args=(response,),
+                        name=f"Appose-Service-{self._service_id}-Call",
+                        daemon=True,
+                    ).start()
+                    continue
                 uuid = response.get("task")
                 if uuid is None:
                     self._debug_service("Invalid service message: {line}")
@@ -488,6 +503,63 @@ class Service:
             task._crash(error)
         self._tasks.clear()
 
+    def _export(self, obj: Any) -> Args:
+        """
+        Export a non-JSON-serializable object, so that the worker
+        can access it remotely via a ServiceProxy.
+
+        Returns:
+            A service_object reference to the exported object.
+        """
+        with self._exports_lock:
+            var_name = f"_appose_service_{self._export_count}"
+            self._export_count += 1
+            self._exports[var_name] = obj
+        return {"appose_type": "service_object", "var_name": var_name}
+
+    def _send(self, request: Args) -> None:
+        """
+        Send a request to the worker process.
+        """
+        encoded = encode(request, self._export)
+        # NB: Requests may be sent from multiple threads, and must not interleave.
+        with self._stdin_lock:
+            # NB: Flush is necessary to ensure worker receives the data!
+            print(encoded, file=self._process.stdin, flush=True)
+        self._debug_service(encoded)
+
+    def _handle_call(self, request: Args) -> None:
+        """
+        Perform an operation requested by the worker on an exported service
+        object, then send the outcome back to the worker as a REPLY.
+        """
+        reply: Args = {
+            "requestType": RequestType.REPLY.value,
+            "call": request.get("call"),
+        }
+        # noinspection PyBroadException
+        try:
+            obj = self._exports[request.get("var")]
+            op = request.get("op")
+            if op == "get":
+                result = getattr(obj, request.get("name"))
+            elif op == "call":
+                args = proxify_worker_objects(request.get("args") or [], self)
+                result = obj(*args)
+            elif op == "dir":
+                result = dir(obj)
+            else:
+                raise ValueError(f"Invalid call operation: {op}")
+            reply["result"] = result
+            self._send(reply)
+        except Exception:  # noqa: BLE001 -- any failure must be reported back to the waiting worker
+            reply.pop("result", None)
+            reply["error"] = format_exc()
+            try:
+                self._send(reply)
+            except Exception:  # noqa: BLE001 -- the worker is unreachable; nothing more to do
+                self._debug_service(format_exc())
+
     def _debug_service(self, message: str) -> None:
         self._debug("SERVICE", message)
 
@@ -537,12 +609,14 @@ class TaskStatus(Enum):
 
 class RequestType(Enum):
     EXECUTE = "EXECUTE"
+    REPLY = "REPLY"
     CANCEL = "CANCEL"
 
 
 class ResponseType(Enum):
     LAUNCH = "LAUNCH"
     UPDATE = "UPDATE"
+    CALL = "CALL"
     COMPLETION = "COMPLETION"
     CANCELATION = "CANCELATION"
     FAILURE = "FAILURE"
@@ -699,11 +773,7 @@ class Task:
         request = {"task": self.uuid, "requestType": request_type.value}
         if args is not None:
             request.update(args)
-
-        encoded = encode(request)
-        # NB: Flush is necessary to ensure worker receives the data!
-        print(encoded, file=self.service._process.stdin, flush=True)
-        self.service._debug_service(encoded)
+        self.service._send(request)
 
     def _handle(self, response: Args) -> None:
         maybe_response_type = response.get("responseType")
