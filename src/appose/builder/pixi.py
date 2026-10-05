@@ -129,6 +129,11 @@ class PixiBuilder(BaseBuilder):
             if self._is_up_to_date(env_dir):
                 return self._build_pixi_environment(pixi, env_dir)
 
+            # We are about to hit the network anyway; take the opportunity
+            # to keep pixi current, so it understands state written by newer
+            # pixi installations elsewhere on the system.
+            pixi.update()
+
             # Handle source-based build (file or content)
             if self._content is not None:
                 if not env_dir.exists():
