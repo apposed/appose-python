@@ -297,12 +297,17 @@ class PixiBuilder(BaseBuilder):
             manifest_file = env_dir_abs / "pixi.toml"
 
         base = str(env_dir_abs)
-        launch_args = [
+        run_args = [
             pixi.command,
             "run",
             "--manifest-path",
             str(manifest_file.absolute()),
         ]
+        # Note: Always name the environment explicitly. Otherwise, when the
+        # calling process is itself inside an activated pixi environment,
+        # pixi selects the environment named by the inherited
+        # PIXI_ENVIRONMENT_NAME, even though it belongs to another project.
+        launch_args = run_args + ["--environment", "default"]
         bin_paths = [str(env_dir_abs / ".pixi" / "envs" / "default" / "bin")]
 
         def activator(name: str) -> Environment:
@@ -316,7 +321,7 @@ class PixiBuilder(BaseBuilder):
             return self._create_env(
                 base,
                 [str(env_dir_abs / ".pixi" / "envs" / name / "bin")],
-                launch_args + ["--environment", name],
+                run_args + ["--environment", name],
             )
 
         return self._create_env(base, bin_paths, launch_args, activator=activator)

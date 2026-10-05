@@ -43,6 +43,23 @@ def test_pixi():
     cowsay_and_assert(env, "baa")
 
 
+def test_pixi_inherited_shell_env():
+    """
+    Tests that a pixi environment launches correctly when the calling process
+    is itself running inside an activated pixi environment of another project.
+    """
+    env = (
+        appose.pixi()
+        .file(str(TEST_RESOURCES / "cowsay-pixi.toml"))
+        .base("target/envs/pixi-cowsay-shell")
+        .env(PIXI_IN_SHELL="1", PIXI_ENVIRONMENT_NAME="nonexistent")
+        .log_debug()
+        .build()
+    )
+    assert env.launch_args()[-2:] == ["--environment", "default"]
+    cowsay_and_assert(env, "baa")
+
+
 def test_pixi_builder_api():
     """Tests the programmatic builder API for pixi."""
     env = (
