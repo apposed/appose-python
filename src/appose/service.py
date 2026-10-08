@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import atexit
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -21,6 +22,7 @@ from traceback import format_exc
 from typing import TYPE_CHECKING, Any, Callable, overload
 from uuid import uuid4
 
+from ._version import __version__
 from .syntax import ScriptSyntax
 from .syntax import get as syntax_from_name
 from .util import process
@@ -77,6 +79,8 @@ class Service:
         Service._service_count += 1
         self._invalid_lines: list[str] = []
         self._error_lines: list[str] = []
+        self._worker_info: Args | None = None
+        self._incompatibility: str | None = None
         self._process: subprocess.Popen | None = None
         self._stdout_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
@@ -558,6 +562,14 @@ class Service:
         """
         return self._process is not None and self._process.poll() is None
 
+    def worker_info(self) -> Args | None:
+        """
+        Get the worker's self-description, from the HELLO message it sends
+        upon startup: its "implementation" (e.g. "appose-python") and the
+        "version" of Appose it implements. None if not yet received.
+        """
+        return self._worker_info
+
     def invalid_lines(self) -> list[str]:
         """
         Unparseable lines emitted by the worker process on its stdout stream,
@@ -596,6 +608,19 @@ class Service:
             try:
                 response = decode(line)
                 self._debug_service(line)  # Echo the line to the debug listener.
+                if response.get("responseType") == ResponseType.HELLO.value:
+                    self._handle_hello(response)
+                    continue
+                if self._worker_info is None and self._incompatibility is None:
+                    # NB: Workers predating the HELLO handshake begin with
+                    # some other message, e.g. LAUNCH for the first task.
+                    self._reject_worker(
+                        "Worker did not identify itself, so it probably "
+                        f"predates Appose {_minor(__version__)}; "
+                        f"this service requires Appose {_minor(__version__)}.x."
+                    )
+                if self._incompatibility is not None:
+                    continue
                 if response.get("responseType") == ResponseType.CALL.value:
                     # The worker is calling back into a service object.
                     # Handle it on its own thread, so that this loop stays
@@ -609,7 +634,7 @@ class Service:
                     continue
                 uuid = response.get("task")
                 if uuid is None:
-                    self._debug_service("Invalid service message: {line}")
+                    self._debug_service(f"Invalid service message: {line}")
                     continue
                 task = self._tasks.get(uuid)
                 if task is None:
@@ -664,7 +689,10 @@ class Service:
 
         # Notify any remaining tasks about the process crash.
         nl = os.linesep
-        error_parts = [f"Worker crashed with exit code {exit_code}."]
+        error_parts = []
+        if self._incompatibility is not None:
+            error_parts.extend([self._incompatibility, ""])
+        error_parts.append(f"Worker crashed with exit code {exit_code}.")
         error_parts.append("")
         error_parts.append("[stdout]")
         if len(self._invalid_lines) == 0:
@@ -681,6 +709,35 @@ class Service:
         for task in self._tasks.values():
             task._crash(error)
         self._tasks.clear()
+
+    def _handle_hello(self, hello: Args) -> None:
+        """
+        Check that the worker is compatible with this service: both must
+        implement the same major.minor version of Appose.
+        """
+        self._worker_info = hello
+        worker_version = str(hello.get("version"))
+        if _minor(worker_version) == _minor(__version__):
+            return
+        implementation = hello.get("implementation", "worker")
+        self._reject_worker(
+            f"{implementation} {worker_version} is incompatible with "
+            f"appose-python {__version__}: the worker must also implement "
+            f"Appose {_minor(__version__)}.x."
+        )
+
+    def _reject_worker(self, reason: str) -> None:
+        """
+        Shut down an incompatible worker, crashing its tasks with the reason.
+        """
+        if os.environ.get("APPOSE_SKIP_VERSION_CHECK"):
+            self._debug_service(f"<ignoring incompatible worker> {reason}")
+            return
+        self._incompatibility = (
+            reason + " Set APPOSE_SKIP_VERSION_CHECK=1 to skip this check."
+        )
+        self._debug_service(f"<incompatible worker> {self._incompatibility}")
+        process.kill_tree(self._process)
 
     def _export(self, obj: Any) -> Args:
         """
@@ -826,6 +883,15 @@ def _shut_down_services() -> None:
             service._debug_service(format_exc())
 
 
+def _minor(version: str) -> str | None:
+    """
+    Extract the major.minor part of a version string, e.g. "1.1" from
+    "1.1.2", "1.1.0.dev0" or "1.1.3-SNAPSHOT"; or None if unparseable.
+    """
+    m = re.match(r"(\d+)\.(\d+)", version)
+    return None if m is None else f"{m.group(1)}.{m.group(2)}"
+
+
 class TaskStatus(Enum):
     INITIAL = "INITIAL"
     QUEUED = "QUEUED"
@@ -859,6 +925,7 @@ class RequestType(Enum):
 
 
 class ResponseType(Enum):
+    HELLO = "HELLO"
     LAUNCH = "LAUNCH"
     UPDATE = "UPDATE"
     CALL = "CALL"
@@ -936,6 +1003,10 @@ class Task:
 
             self.status = TaskStatus.QUEUED
 
+        if self.service._incompatibility is not None:
+            self.service._tasks.pop(self.uuid, None)
+            self._crash(self.service._incompatibility)
+            return self
         args = {"script": self.script, "inputs": self.inputs, "queue": self.queue}
         self._request(RequestType.EXECUTE, args)
 

@@ -25,6 +25,7 @@ from typing import Any
 from uuid import uuid4
 
 # NB: Avoid relative imports so that this script can be run standalone.
+from appose._version import __version__
 from appose.service import RequestType, ResponseType
 from appose.util import message
 from appose.util.message import Args
@@ -284,46 +285,58 @@ class Worker:
                         pending.resolve({"error": "Service connection closed"})
                 return
 
-            request = message.decode(line)
-            uuid = request.get("task")
-            request_type = RequestType(request.get("requestType"))
+            uuid = None
+            try:
+                request = message.decode(line)
+                uuid = request.get("task")
+                self._handle_request(request, uuid)
+            except BaseException:  # noqa: BLE001 -- receiver thread must never die; report and keep going
+                error = traceback.format_exc()
+                print(f"Invalid request: {line}\n{error}", file=sys.stderr)
+                # NB: If the request was meant to start a task, the service is
+                # waiting for that task to finish, so we must report it failed.
+                if isinstance(uuid, str) and uuid not in self.tasks:
+                    Task(self, uuid).fail(error)
 
-            if request_type == RequestType.EXECUTE:
-                script = request.get("script")
-                inputs = request.get("inputs")
-                queue = request.get("queue")
-                task = Task(self, uuid, script, inputs)
-                self.tasks[uuid] = task
-                if queue == "main":
-                    # Add the task to the main thread queue.
-                    self.queue.append(task)
-                else:
-                    # Create a thread and save a reference to it, in case its script
-                    # kills the thread. This happens e.g. if it calls sys.exit.
-                    #
-                    # Assign task._thread only AFTER start() returns. Otherwise the
-                    # janitor (_cleanup_threads) can observe task._thread set while
-                    # the thread is not yet alive (the window between Thread()
-                    # construction and start()) and spuriously fail the task with
-                    # "thread death". See apposed/appose#15.
-                    t = Thread(target=task._run, name=f"Appose-{uuid}")
-                    t.start()
-                    task._thread = t
+    def _handle_request(self, request: Args, uuid: str | None) -> None:
+        request_type = RequestType(request.get("requestType"))
 
-            elif request_type == RequestType.REPLY:
-                call_id = request.get("call")
-                pending = self.calls.pop(call_id, None)
-                if pending is None:
-                    print(f"No such call: {call_id}", file=sys.stderr)
-                    continue
-                pending.resolve(request)
+        if request_type == RequestType.EXECUTE:
+            script = request.get("script")
+            inputs = request.get("inputs")
+            queue = request.get("queue")
+            task = Task(self, uuid, script, inputs)
+            self.tasks[uuid] = task
+            if queue == "main":
+                # Add the task to the main thread queue.
+                self.queue.append(task)
+            else:
+                # Create a thread and save a reference to it, in case its script
+                # kills the thread. This happens e.g. if it calls sys.exit.
+                #
+                # Assign task._thread only AFTER start() returns. Otherwise the
+                # janitor (_cleanup_threads) can observe task._thread set while
+                # the thread is not yet alive (the window between Thread()
+                # construction and start()) and spuriously fail the task with
+                # "thread death". See apposed/appose#15.
+                t = Thread(target=task._run, name=f"Appose-{uuid}")
+                t.start()
+                task._thread = t
 
-            elif request_type == RequestType.CANCEL:
-                task = self.tasks.get(uuid)
-                if task is None:
-                    print(f"No such task: {uuid}", file=sys.stderr)
-                    continue
-                task.cancel_requested = True
+        elif request_type == RequestType.REPLY:
+            call_id = request.get("call")
+            pending = self.calls.pop(call_id, None)
+            if pending is None:
+                print(f"No such call: {call_id}", file=sys.stderr)
+                return
+            pending.resolve(request)
+
+        elif request_type == RequestType.CANCEL:
+            task = self.tasks.get(uuid)
+            if task is None:
+                print(f"No such task: {uuid}", file=sys.stderr)
+                return
+            task.cancel_requested = True
 
     def _cleanup_threads(self) -> None:
         while self.running:
@@ -366,6 +379,16 @@ def _run_startup_script(worker: Worker, env_var: str, label: str, export: bool):
 
 def main() -> None:
     worker = Worker()
+
+    # Identify this worker to the service, which checks compatibility.
+    # NB: This must happen first, before any slow startup scripts.
+    worker._send(
+        {
+            "responseType": ResponseType.HELLO.value,
+            "implementation": "appose-python",
+            "version": __version__,
+        }
+    )
 
     # Register libraries, then execute init script, if provided via
     # environment variables. This happens before the worker's I/O loop

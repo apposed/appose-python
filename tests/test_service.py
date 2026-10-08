@@ -55,11 +55,10 @@ task.outputs["thread"] = threading.current_thread().name
 """
 
 
-def test_groovy():
+def test_groovy(groovy_class_path):
     env = appose.system()
     # NB: For now, use bin/test.sh to copy the needed JARs.
-    class_path = ["target/dependency/*"]
-    with env.groovy(class_path=class_path) as service:
+    with env.groovy(class_path=groovy_class_path) as service:
         maybe_debug(service)
         execute_and_assert(service, collatz_groovy)
 
@@ -101,11 +100,10 @@ def test_scope_python():
         assert result == 9
 
 
-def test_main_thread_queue_groovy():
+def test_main_thread_queue_groovy(groovy_class_path):
     env = appose.system()
     # NB: For now, use bin/test.sh to copy the needed JARs.
-    class_path = ["target/dependency/*"]
-    with env.groovy(class_path=class_path) as service:
+    with env.groovy(class_path=groovy_class_path) as service:
         maybe_debug(service)
 
         task = service.task(main_thread_check_groovy, queue="main")
@@ -151,8 +149,10 @@ def test_init():
         assert result == "initialized", "Init script should set init_value variable"
 
 
-def test_init_numpy():
+def test_init_numpy(monkeypatch):
     """Tests that NumPy works on every platform, even Windows."""
+    # NB: The environment's appose is an old release, predating the version check.
+    monkeypatch.setenv("APPOSE_SKIP_VERSION_CHECK", "1")
     env = (
         appose.pixi()
         .base("target/envs/test-init-numpy")

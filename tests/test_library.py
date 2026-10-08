@@ -14,6 +14,7 @@ import pytest
 
 import appose
 from appose.service import TaskException
+from tests.conftest import SIBLING_APPOSE_JAVA
 from tests.test_base import maybe_debug
 
 MODELS_LIB = dedent(
@@ -180,30 +181,24 @@ def test_library_invalid_args():
         service.import_library("mylib", "mylib.py")  # type: ignore[misc]
 
 
-def _groovy_class_path() -> list[str] | None:
+def _has_groovy_libraries() -> bool:
     """
-    Class path for a Groovy worker supporting libraries: a sibling appose-java
-    build if present (as appose-java's tests do for appose-python), else the
-    appose-java release fetched by bin/test.sh, if recent enough.
+    Whether the appose-java used by the groovy_class_path fixture supports
+    libraries: a sibling build, or the release fetched by bin/test.sh.
     """
-    class_path = ["target/dependency/*"]
-    sibling = Path("../appose-java/target/classes")
-    if sibling.is_dir():
-        class_path.insert(0, str(sibling.resolve()))
-    for entry in class_path:
-        if entry.endswith("*"):
-            for jar in Path(entry[:-1]).glob("appose-*.jar"):
-                with zipfile.ZipFile(jar) as z:
-                    if "org/apposed/appose/GroovyLibraries.class" in z.namelist():
-                        return class_path
-        elif (Path(entry) / "org/apposed/appose/GroovyLibraries.class").exists():
-            return class_path
-    return None
+    if SIBLING_APPOSE_JAVA.is_dir():
+        return (
+            SIBLING_APPOSE_JAVA / "org/apposed/appose/GroovyLibraries.class"
+        ).exists()
+    for jar in Path("target/dependency").glob("appose-*.jar"):
+        with zipfile.ZipFile(jar) as z:
+            if "org/apposed/appose/GroovyLibraries.class" in z.namelist():
+                return True
+    return False
 
 
-GROOVY_CLASS_PATH = _groovy_class_path()
 needs_groovy_libraries = pytest.mark.skipif(
-    GROOVY_CLASS_PATH is None, reason="appose-java lacks GroovyLibraries"
+    not _has_groovy_libraries(), reason="appose-java lacks GroovyLibraries"
 )
 
 MODELS_GROOVY = dedent(
@@ -224,9 +219,9 @@ UTIL_GROOVY = (
 
 
 @needs_groovy_libraries
-def test_library_groovy():
+def test_library_groovy(groovy_class_path):
     env = appose.system()
-    with env.groovy(class_path=GROOVY_CLASS_PATH) as service:
+    with env.groovy(class_path=groovy_class_path) as service:
         maybe_debug(service)
         service.import_library(
             "mylib",
@@ -245,14 +240,14 @@ def test_library_groovy():
 
 
 @needs_groovy_libraries
-def test_library_groovy_quoting():
+def test_library_groovy_quoting(groovy_class_path):
     """Test that awkward characters survive the trip into the worker intact."""
     text = "it's a \\ \"$dollar\" ''' \\u0041 \t line\r\nbreak"
     escaped = (
         text.replace("\\", "\\\\").replace("'", "\\'").replace("$", "\\$")
     ).replace("\r", "\\r")
     env = appose.system()
-    with env.groovy(class_path=GROOVY_CLASS_PATH) as service:
+    with env.groovy(class_path=groovy_class_path) as service:
         maybe_debug(service)
         service.import_library(
             "Text", source=f"class Text {{ static String get() {{ '''{escaped}''' }} }}"
