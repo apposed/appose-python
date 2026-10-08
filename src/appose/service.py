@@ -8,10 +8,13 @@ The appose.service package contains classes for services and tasks.
 
 from __future__ import annotations
 
+import atexit
 import os
 import subprocess
 import tempfile
 import threading
+import time
+import weakref
 from enum import Enum
 from pathlib import Path
 from traceback import format_exc
@@ -46,9 +49,20 @@ class Service:
     in a different process. Using the service, programs create Appose *tasks*
     that run asynchronously in the worker process, which notifies the
     service of updates via communication over pipes (stdin and stdout).
+
+    A service still running when the program exits is shut down
+    automatically: it is closed, and killed if its worker has not exited
+    within exit_timeout seconds.
     """
 
     _service_count: int = 0
+
+    exit_timeout: float | None = 5.0
+    """
+    Seconds to wait at program exit for the worker to shut down gracefully,
+    before killing it. None waits indefinitely. Set this on the Service
+    class to change the default, or on an instance to override it.
+    """
 
     def __init__(
         self, cwd: str | Path, env_vars: dict[str, str | None] | None = None, *args: str
@@ -159,14 +173,20 @@ class Service:
                 self._env_vars["APPOSE_INIT_SCRIPT"] = init_file.name
 
         self._process = process.builder(self._cwd, self._env_vars, *self._args)
+        _track(self)
+
+        # NB: These threads block until the worker's output streams close, so
+        # they must be daemon threads. Interpreter shutdown waits for every
+        # non-daemon thread before running atexit hooks, so it would wait
+        # forever on a worker that only an atexit hook (e.g. ours) shuts down.
         self._stdout_thread = threading.Thread(
-            target=self._stdout_loop, name=f"{prefix}-Stdout"
+            target=self._stdout_loop, name=f"{prefix}-Stdout", daemon=True
         )
         self._stderr_thread = threading.Thread(
-            target=self._stderr_loop, name=f"{prefix}-Stderr"
+            target=self._stderr_loop, name=f"{prefix}-Stderr", daemon=True
         )
         self._monitor_thread = threading.Thread(
-            target=self._monitor_loop, name=f"{prefix}-Monitor"
+            target=self._monitor_loop, name=f"{prefix}-Monitor", daemon=True
         )
         self._stdout_thread.start()
         self._stderr_thread.start()
@@ -332,42 +352,90 @@ class Service:
 
         return create(self, var, queue)
 
-    def close(self) -> None:
+    def close(self, timeout: float | None = None) -> int | None:
         """
         Close the worker process's input stream, in order to shut it down.
+        The worker finishes any pending tasks, and then exits.
+
+        Without a timeout, this method only begins the shutdown, returning
+        immediately. With a timeout, it waits up to that many seconds for
+        the worker to exit, then kills it (see kill()) if it has not.
+
+        Args:
+            timeout: Seconds to wait for the worker to exit before killing
+                it, or None to return without waiting. Zero kills it at once.
+
+        Returns:
+            Exit code of the worker process, or None if no timeout was given.
+
+        Raises:
+            RuntimeError: If the service has not been started.
         """
-        if self._process is None:
-            raise RuntimeError("Service has not been started")
+        self._require_process()
         self._process.stdin.close()
+        if timeout is None:
+            return None
+        try:
+            return self.wait_for(timeout)
+        except subprocess.TimeoutExpired:
+            self.kill()
+        # NB: The killed worker dies promptly, but the threads processing its
+        # output may not: a descendant that left the process group could keep
+        # the streams open, or a listener could be stuck. Do not wait forever.
+        self._process.wait()
+        self._join_threads(time.monotonic() + timeout)
+        return self._process.returncode
 
     def kill(self) -> None:
         """
         Force the service's worker process to begin shutting down. Any tasks still
         pending completion will be interrupted, reporting TaskStatus.CRASHED.
 
+        This kills the worker's whole process tree, not only the process
+        launched directly; e.g. `pixi run` launches the actual worker process
+        as its child.
+
         To shut down the service more gently, allowing any pending tasks to run to
         completion, use close() instead.
 
         To wait until the service's worker process has completely shut down
         and all output has been reported, call wait_for() afterward.
-        """
-        self._process.kill()
 
-    def wait_for(self) -> int:
+        Raises:
+            RuntimeError: If the service has not been started.
         """
-        Wait for the service's worker process to terminate.
+        self._require_process()
+        process.kill_tree(self._process)
+
+    def wait_for(self, timeout: float | None = None) -> int:
+        """
+        Wait for the service's worker process to terminate, and for all its
+        output to be reported.
+
+        Args:
+            timeout: Maximum seconds to wait, or None to wait indefinitely.
 
         Returns:
-            Exit value of the worker process.
+            Exit code of the worker process.
+
+        Raises:
+            RuntimeError: If the service has not been started.
+            subprocess.TimeoutExpired: If the timeout expires first.
         """
-        self._process.wait()
-
-        # Wait for worker output processing threads to finish up.
-        self._stdout_thread.join()
-        self._stderr_thread.join()
-        self._monitor_thread.join()
-
+        self._require_process()
+        deadline = None if timeout is None else time.monotonic() + timeout
+        self._process.wait(timeout)
+        if not self._join_threads(deadline):
+            raise subprocess.TimeoutExpired(self._process.args, timeout)
         return self._process.returncode
+
+    @property
+    def returncode(self) -> int | None:
+        """
+        Exit code of the worker process, or None if it has not yet exited
+        (or has not been started).
+        """
+        return None if self._process is None else self._process.poll()
 
     def is_alive(self) -> bool:
         """
@@ -560,6 +628,28 @@ class Service:
             except Exception:  # noqa: BLE001 -- the worker is unreachable; nothing more to do
                 self._debug_service(format_exc())
 
+    def _require_process(self) -> None:
+        if self._process is None:
+            raise RuntimeError("Service has not been started")
+
+    def _join_threads(self, deadline: float | None) -> bool:
+        """
+        Wait for the worker output processing threads to finish up.
+
+        Args:
+            deadline: time.monotonic() value by which to give up,
+                or None to wait indefinitely.
+
+        Returns:
+            Whether all the threads finished.
+        """
+        threads = (self._stdout_thread, self._stderr_thread, self._monitor_thread)
+        for thread in threads:
+            thread.join(
+                None if deadline is None else max(0, deadline - time.monotonic())
+            )
+        return not any(thread.is_alive() for thread in threads)
+
     def _debug_service(self, message: str) -> None:
         self._debug("SERVICE", message)
 
@@ -579,6 +669,50 @@ class Service:
 
     def __exit__(self, exc_type, exc_value, exc_tb) -> None:
         self.close()
+
+
+_started_services: weakref.WeakSet[Service] = weakref.WeakSet()
+_started_services_lock = threading.Lock()
+_exit_hook_registered = False
+
+
+def _track(service: Service) -> None:
+    """
+    Remember a started service, so that it can be shut down at program exit.
+    """
+    global _exit_hook_registered
+    with _started_services_lock:
+        if not _exit_hook_registered:
+            # NB: Registering upon first start, rather than at import, means
+            # atexit hooks registered after starting a service, e.g. to close
+            # it, still run before this one; atexit runs hooks in reverse.
+            atexit.register(_shut_down_services)
+            _exit_hook_registered = True
+        _started_services.add(service)
+
+
+def _shut_down_services() -> None:
+    """
+    Shut down all services still running, giving each worker up to its
+    service's exit_timeout to exit gracefully before killing it.
+    """
+    with _started_services_lock:
+        services = [s for s in _started_services if s.is_alive()]
+    # Close every service first, so that their timeouts elapse concurrently.
+    start = time.monotonic()
+    for service in services:
+        try:
+            service.close()
+        except Exception:  # noqa: BLE001 -- must still shut down the others
+            service._debug_service(format_exc())
+    for service in services:
+        timeout = service.exit_timeout
+        if timeout is not None:
+            timeout = max(0, start + timeout - time.monotonic())
+        try:
+            service.close(timeout)
+        except Exception:  # noqa: BLE001 -- must still shut down the others
+            service._debug_service(format_exc())
 
 
 class TaskStatus(Enum):

@@ -9,6 +9,7 @@ Utility functions for working with processes.
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import threading
 from pathlib import Path
@@ -30,6 +31,8 @@ def builder(
 
     Returns:
         Configured Popen object with stdin, stdout, and stderr piped.
+        On POSIX systems, the process leads a new process group,
+        so that kill_tree() can terminate it along with its descendants.
     """
     env = os.environ.copy()
     if env_vars:
@@ -50,7 +53,38 @@ def builder(
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
+        start_new_session=os.name != "nt",
     )
+
+
+def kill_tree(process: subprocess.Popen) -> None:
+    """
+    Forcibly terminate a process created by builder(), along with all of its
+    descendants. This matters when the process is a launcher, such as
+    `pixi run`, whose child does the actual work: killing only the launcher
+    would leave that child running as an orphan.
+
+    Args:
+        process: The process to terminate, together with its descendants.
+    """
+    if os.name == "nt":
+        if process.poll() is None:
+            # NB: taskkill finds descendants via their parent process IDs,
+            # so it misses any already orphaned by an exited intermediary.
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        process.kill()
+        return
+    try:
+        # NB: The process group outlives its leader, so this reaches
+        # descendants even after the launcher process itself has exited.
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # The whole process group has already exited.
 
 
 def run(
