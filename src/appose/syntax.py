@@ -246,6 +246,27 @@ class GroovySyntax(ScriptSyntax):
         # Groovy's metaClass provides runtime introspection.
         return f"({object_var_name}.metaClass.methods*.name + {object_var_name}.metaClass.properties*.name).unique()"
 
+    def library_suffix(self) -> str:
+        return ".groovy"
+
+    def import_library(
+        self, name: str, files: dict[str, str], origin: str, package: bool
+    ) -> str:
+        entries = ", ".join(f"{_quote(k)}: {_quote(v)}" for k, v in files.items())
+        return (
+            f"org.apposed.appose.GroovyLibraries.register({_quote(name)}, "
+            f"[{entries or ':'}], {_quote(origin)}, {str(package).lower()})\n"
+        )
+
+
+def _quote(s: str) -> str:
+    """
+    Quote the given string as a single-quoted Groovy string literal,
+    which (unlike double-quoted strings) does not interpolate $ expressions.
+    """
+    s = s.replace("\\", "\\\\").replace("'", "\\'")
+    return "'" + s.replace("\n", "\\n").replace("\r", "\\r") + "'"
+
 
 # All known script syntax implementations.
 _SYNTAXES: list[ScriptSyntax] = [

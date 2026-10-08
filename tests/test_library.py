@@ -4,6 +4,10 @@
 
 """Tests for library code registered via Service.import_library."""
 
+from __future__ import annotations
+
+import zipfile
+from pathlib import Path
 from textwrap import dedent
 
 import pytest
@@ -174,3 +178,83 @@ def test_library_invalid_args():
         service.import_library("mylib", path="mylib.py", source="")
     with pytest.raises(TypeError):
         service.import_library("mylib", "mylib.py")  # type: ignore[misc]
+
+
+def _groovy_class_path() -> list[str] | None:
+    """
+    Class path for a Groovy worker supporting libraries: a sibling appose-java
+    build if present (as appose-java's tests do for appose-python), else the
+    appose-java release fetched by bin/test.sh, if recent enough.
+    """
+    class_path = ["target/dependency/*"]
+    sibling = Path("../appose-java/target/classes")
+    if sibling.is_dir():
+        class_path.insert(0, str(sibling.resolve()))
+    for entry in class_path:
+        if entry.endswith("*"):
+            for jar in Path(entry[:-1]).glob("appose-*.jar"):
+                with zipfile.ZipFile(jar) as z:
+                    if "org/apposed/appose/GroovyLibraries.class" in z.namelist():
+                        return class_path
+        elif (Path(entry) / "org/apposed/appose/GroovyLibraries.class").exists():
+            return class_path
+    return None
+
+
+GROOVY_CLASS_PATH = _groovy_class_path()
+needs_groovy_libraries = pytest.mark.skipif(
+    GROOVY_CLASS_PATH is None, reason="appose-java lacks GroovyLibraries"
+)
+
+MODELS_GROOVY = dedent(
+    """
+    package mylib
+    class Models {
+      static final Map<String, String> CACHE = [:]
+      static int loadCount = 0
+      static String get(String key) {
+        CACHE.computeIfAbsent(key) { loadCount++; Util.load(it) }
+      }
+    }
+    """
+)
+UTIL_GROOVY = (
+    "package mylib\nclass Util { static String load(String k) { k.toUpperCase() } }\n"
+)
+
+
+@needs_groovy_libraries
+def test_library_groovy():
+    env = appose.system()
+    with env.groovy(class_path=GROOVY_CLASS_PATH) as service:
+        maybe_debug(service)
+        service.import_library(
+            "mylib",
+            source={
+                "mylib/Models.groovy": MODELS_GROOVY,
+                "mylib/Util.groovy": UTIL_GROOVY,
+            },
+        ).init("mylib.Models.get('warm')")
+        script = "import mylib.Models\n"
+        assert (
+            service.task(script + "Models.get('a')").wait_for().outputs["result"] == "A"
+        )
+        # Each model was loaded only once, and stayed warm across tasks.
+        task = service.task(script + "Models.get('a'); Models.loadCount").wait_for()
+        assert task.outputs["result"] == 2
+
+
+@needs_groovy_libraries
+def test_library_groovy_quoting():
+    """Test that awkward characters survive the trip into the worker intact."""
+    text = "it's a \\ \"$dollar\" ''' \\u0041 \t line\r\nbreak"
+    escaped = (
+        text.replace("\\", "\\\\").replace("'", "\\'").replace("$", "\\$")
+    ).replace("\r", "\\r")
+    env = appose.system()
+    with env.groovy(class_path=GROOVY_CLASS_PATH) as service:
+        maybe_debug(service)
+        service.import_library(
+            "Text", source=f"class Text {{ static String get() {{ '''{escaped}''' }} }}"
+        )
+        assert service.task("Text.get()").wait_for().outputs["result"] == text
