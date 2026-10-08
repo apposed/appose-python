@@ -121,6 +121,44 @@ class ScriptSyntax(ABC):
         """
         ...
 
+    def library_suffix(self) -> str:
+        """
+        The file suffix of library source files in this language (e.g. ".py").
+
+        When a library is given as a directory, only files with this suffix
+        are sent to the worker as source code. When it is given as a single
+        string of source code, this suffix is used to name it.
+
+        Raises:
+            NotImplementedError: If this syntax does not support libraries.
+        """
+        raise NotImplementedError(f"{self.name()} syntax does not support libraries")
+
+    def import_library(
+        self, name: str, files: dict[str, str], origin: str, package: bool
+    ) -> str:
+        """
+        Generate a self-contained script that registers library code with the
+        worker, such that tasks can subsequently import it by name.
+
+        The generated script must also be valid as part of a service init
+        script, so it must not depend on task inputs or the task variable.
+
+        Args:
+            name: The name to import the library as.
+            files: Mapping from relative POSIX path to source code.
+            origin: Path of the library on the service side.
+            package: Whether the library is a package (directory) rather than
+                a single-file module.
+
+        Returns:
+            A script that makes the library importable in the worker.
+
+        Raises:
+            NotImplementedError: If this syntax does not support libraries.
+        """
+        raise NotImplementedError(f"{self.name()} syntax does not support libraries")
+
 
 class PythonSyntax(ScriptSyntax):
     """
@@ -155,6 +193,18 @@ class PythonSyntax(ScriptSyntax):
         # Return all attributes from dir(), including private ones.
         # Let the object's __dir__ implementation decide what to expose.
         return f"dir({object_var_name})"
+
+    def library_suffix(self) -> str:
+        return ".py"
+
+    def import_library(
+        self, name: str, files: dict[str, str], origin: str, package: bool
+    ) -> str:
+        # NB: repr() of str/dict/bool values yields valid Python literals.
+        return (
+            "from appose.library import register as _appose_register\n"
+            f"_appose_register({name!r}, {files!r}, {origin!r}, {package!r})\n"
+        )
 
 
 class GroovySyntax(ScriptSyntax):

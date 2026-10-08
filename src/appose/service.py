@@ -83,6 +83,7 @@ class Service:
         self._monitor_thread: threading.Thread | None = None
         self._debug_callback: Callable[[str], Any] | None = None
         self._init_script: str | None = None
+        self._libraries: list[str] = []
         self._syntax: ScriptSyntax | None = None
         self._exports: dict[str, Any] = {}
         self._export_count: int = 0
@@ -126,6 +127,108 @@ class Service:
         self._init_script = script
         return self
 
+    def import_library(
+        self,
+        name: str,
+        *,
+        path: str | Path | None = None,
+        source: str | dict[str, str] | None = None,
+    ) -> Service:
+        """
+        Register library code with the worker, so that tasks can import it
+        by name with a normal import statement, e.g. `import mylib`.
+
+        The library is given either as a path on disk, or directly as source
+        code (e.g. for tests, or code generated on the fly), but not both.
+        Both are keyword-only, so that each call states which it means.
+
+        The library is ordinary Python source, which can be developed and
+        type-checked in an IDE like any other module, with no reference to
+        Appose's task variable. Because an imported module lives in the
+        worker's sys.modules, its module-level state persists across tasks:
+        e.g., a cache of expensive-to-load models stays "warm" for all
+        subsequent tasks, without the need for task.export.
+
+        The library's source is read now and sent to the worker, so later
+        changes to the files on disk are not seen unless the library is
+        registered again. Package resources (via importlib.resources), on the
+        other hand, are read from the directory on disk when accessed, as for
+        any installed package; so they are available only to libraries given
+        by path, on the same filesystem as the worker. Registering changed source evicts the previously
+        imported module (and its state); registering unchanged source is a
+        no-op. Registration alone does not import the library: the first
+        task to import it does, and pays any initialization cost.
+
+        If called before the service starts, registration happens during
+        worker startup, before the init script (see init()), which may then
+        import the library itself. Otherwise, registration happens via a
+        task, and this method blocks until it completes.
+
+        Args:
+            name: The top-level module name to import the library as.
+            path: A single source file (imported as a module), or a directory
+                of source files (imported as a package, with subdirectories
+                as subpackages).
+            source: The library's source code, as a string (imported as a
+                module), or as a dict mapping relative POSIX paths such as
+                "__init__.py" and "sub/mod.py" to source code (imported as a
+                package).
+
+        Returns:
+            This service object, for chaining method calls.
+
+        Raises:
+            ValueError: If the name is not a valid module name, or not
+                exactly one of path and source is given, or the path is
+                neither a file nor a directory, or no script syntax has
+                been configured for this service.
+            NotImplementedError: If this service's script syntax does not
+                support libraries.
+            TaskException: If the worker fails to register the library.
+        """
+        if not name.isidentifier():
+            raise ValueError(f"Invalid library name: {name}")
+        if self._syntax is None:
+            raise ValueError("No script syntax configured for this service")
+        if (path is None) == (source is None):
+            raise ValueError("Exactly one of path or source must be given")
+        if source is not None:
+            # NB: Not wrapped in <...>, which linecache would refuse to
+            # resolve via the loader, leaving tracebacks without source lines.
+            origin = f"<appose>/{name}"
+            if isinstance(source, str):
+                suffix = self._syntax.library_suffix()
+                files = {f"{name}{suffix}": source}
+                origin += suffix
+                package = False
+            else:
+                files = dict(source)
+                package = True
+            script = self._syntax.import_library(name, files, origin, package)
+            return self._register_library(script)
+        path = Path(path).resolve()
+        if path.is_file():
+            files = {path.name: path.read_text(encoding="utf-8")}
+            package = False
+        elif path.is_dir():
+            files = {
+                f.relative_to(path).as_posix(): f.read_text(encoding="utf-8")
+                for f in sorted(path.rglob(f"*{self._syntax.library_suffix()}"))
+                if "__pycache__" not in f.parts
+            }
+            package = True
+        else:
+            raise ValueError(f"No such file or directory: {path}")
+        script = self._syntax.import_library(name, files, path.as_posix(), package)
+        return self._register_library(script)
+
+    def _register_library(self, script: str) -> Service:
+        if self._process is None:
+            self._libraries.append(script)
+        else:
+            self.task(script).wait_for()
+        return self
+
     def env(self, **vars: str | None) -> Service:
         """
         Set environment variables to pass to the worker process.
@@ -160,8 +263,10 @@ class Service:
         prefix = f"Appose-Service-{self._service_id}"
 
         # If an init script is provided, write it to a temporary file
-        # and pass its path via environment variable.
-        if self._init_script:
+        # and pass its path via environment variable. Library registrations
+        # come first, so that the init script can import those libraries.
+        init_script = "".join(self._libraries) + (self._init_script or "")
+        if init_script:
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 encoding="utf-8",
@@ -169,7 +274,7 @@ class Service:
                 suffix=".txt",
                 delete=False,
             ) as init_file:
-                init_file.write(self._init_script)
+                init_file.write(init_script)
                 self._env_vars["APPOSE_INIT_SCRIPT"] = init_file.name
 
         self._process = process.builder(self._cwd, self._env_vars, *self._args)
