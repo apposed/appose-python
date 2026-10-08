@@ -84,6 +84,21 @@ def test_pixi_vacuous():
         appose.pixi().base(base).log_debug().build()
 
 
+def test_pixi_vacuous_keeps_existing_env():
+    """Tests that building without packages or config uses an existing env as-is."""
+    base = Path("target/envs/pixi-vacuous-existing")
+    if base.exists():
+        shutil.rmtree(base)
+    marker = base / ".pixi" / "envs" / "default" / "conda-meta" / "history"
+    marker.parent.mkdir(parents=True)
+    marker.touch()
+
+    # With nothing to build from, the existing env must be used as-is, not wiped.
+    env = appose.pixi().base(base).log_debug().build()
+    assert env.base() == str(base.absolute())
+    assert marker.exists()
+
+
 def test_pixi_appose_requirement():
     """Tests that building without appose dependency fails."""
     base = "target/envs/pixi-appose-requirement"

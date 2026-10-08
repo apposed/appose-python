@@ -129,6 +129,21 @@ class PixiBuilder(BaseBuilder):
             if self.status() == EnvStatus.CURRENT:
                 return self._build_pixi_environment(pixi, env_dir)
 
+            # With nothing to build from, use an existing env as-is, if any.
+            # Note: this must happen before anything is wiped below.
+            if (
+                self._content is None
+                and not self._conda_packages
+                and not self._pypi_packages
+            ):
+                if self._has_environment(env_dir):
+                    return self._build_pixi_environment(pixi, env_dir)
+                raise BuildException(
+                    self,
+                    "Cannot build empty environment programmatically. "
+                    "Either provide a source file via Appose.pixi(source), or add packages via .conda() or .pypi().",
+                )
+
             # We are about to hit the network anyway; take the opportunity
             # to keep pixi current, so it understands state written by newer
             # pixi installations elsewhere on the system.
@@ -171,14 +186,6 @@ class PixiBuilder(BaseBuilder):
                 env_dir.mkdir(parents=True, exist_ok=True)
 
                 pixi.init(env_dir)
-
-                # Fail fast for vacuous environments
-                if not self._conda_packages and not self._pypi_packages:
-                    raise BuildException(
-                        self,
-                        "Cannot build empty environment programmatically. "
-                        "Either provide a source file via Appose.pixi(source), or add packages via .conda() or .pypi().",
-                    )
 
                 # Add channels
                 if self._channels:
