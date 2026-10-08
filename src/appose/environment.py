@@ -17,7 +17,7 @@ from .syntax import GroovySyntax, PythonSyntax
 from .util.filepath import find_exe
 
 if TYPE_CHECKING:
-    from .builder import Builder
+    from .builder import Builder, EnvStatus
 
 
 class Environment:
@@ -117,6 +117,15 @@ class Environment:
             BuildException: If something goes wrong during rebuild.
         """
         return self.builder().rebuild()
+
+    def status(self) -> EnvStatus:
+        """
+        Gets the current status of this environment on disk.
+
+        Returns:
+            The result of Builder.status() on this environment's builder.
+        """
+        return self.builder().status()
 
     def delete(self) -> Environment:
         """

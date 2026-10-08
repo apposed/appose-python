@@ -17,6 +17,7 @@ import os
 import shutil
 import sys
 from abc import ABC, abstractmethod
+from enum import Enum
 from pathlib import Path
 from typing import Callable
 from urllib.request import urlopen
@@ -57,6 +58,37 @@ class BuildException(Exception):
         super().__init__(message)
         self.builder: Builder | None = builder
         self.__cause__ = cause
+
+
+class EnvStatus(Enum):
+    """
+    The state of the environment targeted by a Builder, as reported by
+    Builder.status(). Useful for deciding whether Builder.build() is
+    necessary, or merely a refresh.
+
+    - MISSING: No environment exists at the target location. This includes
+      the case of a directory that exists but contains no environment (e.g.,
+      one created by Builder.wrap() of an empty folder).
+      build() will create the environment.
+    - INCOMPATIBLE: An environment of a different type exists at the target
+      location: e.g., a conda environment targeted by a pixi builder.
+      build() will fail; rebuild() would replace it.
+    - EXTERNAL: An environment exists, but was not built by Appose (no
+      recorded build state): e.g., made directly with conda, pixi or venv,
+      or by an older Appose. build() will use it as-is if the builder has no
+      configuration to build from; rebuild() would replace it.
+    - STALE: An environment built by Appose exists, but its recorded build
+      state differs from the builder's current configuration.
+      build() will update it.
+    - CURRENT: An environment built by Appose exists, and matches the
+      builder's current configuration. build() will do no package management.
+    """
+
+    MISSING = "MISSING"
+    INCOMPATIBLE = "INCOMPATIBLE"
+    EXTERNAL = "EXTERNAL"
+    STALE = "STALE"
+    CURRENT = "CURRENT"
 
 
 class Builder(ABC):
@@ -114,6 +146,22 @@ class Builder(ABC):
         except Exception as e:  # noqa: BLE001 -- any deletion failure is wrapped as a BuildException
             raise BuildException(self, cause=e)
         return self.build()
+
+    @abstractmethod
+    def status(self) -> EnvStatus:
+        """
+        Report whether the environment targeted by this builder has been built,
+        and whether it matches the builder's current configuration.
+
+        This is a cheap, side-effect-free query of the filesystem: it never
+        downloads tools, installs packages, or creates directories.
+        It reflects the on-disk state at the time of the call, so (for example)
+        it reports EnvStatus.MISSING after delete().
+
+        Returns:
+            The status of the target environment.
+        """
+        ...
 
     @abstractmethod
     def delete(self) -> None:
@@ -442,6 +490,26 @@ class BaseBuilder(Builder):
         if dir_path is not None and dir_path.exists():
             shutil.rmtree(dir_path)
 
+    def status(self) -> EnvStatus:
+        """Default implementation: inspect env_dir and its appose.json."""
+        try:
+            dir_path = self._resolve_env_dir()
+        except (ValueError, TypeError):
+            # No name, directory or (recognizable) content: no target location to speak of.
+            return EnvStatus.MISSING
+        if self._incompatibility(dir_path) is not None:
+            return EnvStatus.INCOMPATIBLE
+        if not self._has_environment(dir_path):
+            return EnvStatus.MISSING
+        if not (dir_path / "appose.json").is_file():
+            return EnvStatus.EXTERNAL
+        try:
+            return (
+                EnvStatus.CURRENT if self._is_up_to_date(dir_path) else EnvStatus.STALE
+            )
+        except (OSError, ValueError):
+            return EnvStatus.STALE
+
     def wrap(self, env_dir: str | Path) -> Environment:
         """Default implementation: set base and build."""
         env_path = Path(env_dir)
@@ -509,7 +577,12 @@ class BaseBuilder(Builder):
     def _add_state_fields(self, state: dict) -> None:
         """Populate state dict for appose.json comparison. Subclasses override, calling super first."""
         state["content"] = self._content
-        state["scheme"] = self._scheme.name() if self._scheme is not None else None
+        # Note: build() infers the scheme from content before recording state,
+        # so status() must do likewise for the comparison to match.
+        scheme = self._scheme
+        if scheme is None and self._content is not None:
+            scheme = scheme_from_content(self._content)
+        state["scheme"] = scheme.name() if scheme is not None else None
         state["channels"] = list(self._channels)
         state["flags"] = list(self._flags)
         state["envVars"] = dict(sorted(self._env_vars.items()))
@@ -521,7 +594,10 @@ class BaseBuilder(Builder):
         return json.dumps(state, separators=(",", ":"))
 
     def _is_up_to_date(self, env_dir: Path) -> bool:
-        """Returns True if appose.json matches current builder state."""
+        """
+        Returns True if appose.json matches current builder state. See also
+        status(), which also checks that the environment itself is present.
+        """
         appose_json = env_dir / "appose.json"
         if not appose_json.is_file():
             return False
@@ -531,6 +607,39 @@ class BaseBuilder(Builder):
         """Write current builder state to appose.json after a successful build."""
         appose_json = env_dir / "appose.json"
         appose_json.write_text(self._build_state_string(), encoding="utf-8")
+
+    def _has_environment(self, env_dir: Path) -> bool:
+        """
+        Tests whether the given directory actually contains a usable environment
+        of this builder's type, regardless of who built it. Used by status().
+        Note: unlike BuilderFactory.can_wrap, this requires the environment
+        itself to be present, not merely its configuration.
+        """
+        return env_dir.is_dir()
+
+    def _incompatibility(self, env_dir: Path) -> str | None:
+        """
+        Checks whether the given directory holds an environment of a different
+        type, which this builder cannot build over. Used by status() and
+        _check_compatibility().
+
+        Returns:
+            A description of the incompatibility, or None if compatible.
+        """
+        return None
+
+    def _check_compatibility(self, env_dir: Path) -> None:
+        """
+        Fails if the given directory holds an environment of a different type.
+
+        Raises:
+            BuildException: If the environment is incompatible.
+        """
+        reason = self._incompatibility(env_dir)
+        if reason is not None:
+            raise BuildException(
+                self, f"Cannot use {type(self).__name__}: {reason} at {env_dir}"
+            )
 
     def _resolve_env_dir(self) -> Path:
         """Determine the environment directory path."""
@@ -707,6 +816,11 @@ class SimpleBuilder(BaseBuilder):
 
         return self._create_env(base_path, bin_paths, launch_args)
 
+    def status(self) -> EnvStatus:
+        # No package management, hence no build state to compare against.
+        base = self._resolve_env_dir()
+        return EnvStatus.EXTERNAL if base.is_dir() else EnvStatus.MISSING
+
     def rebuild(self) -> Environment:
         """SimpleBuilder does not support rebuild."""
         raise NotImplementedError(
@@ -764,6 +878,12 @@ class DynamicBuilder(BaseBuilder):
         delegate = self._create_builder()
         self._copy_config_to_delegate(delegate)
         return delegate.build()
+
+    def status(self) -> EnvStatus:
+        """Report status by delegating to the appropriate builder."""
+        delegate = self._create_builder()
+        self._copy_config_to_delegate(delegate)
+        return delegate.status()
 
     def rebuild(self) -> Environment:
         """Rebuild by delegating to the appropriate builder."""

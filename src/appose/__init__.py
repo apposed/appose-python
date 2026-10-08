@@ -198,6 +198,7 @@ from ._version import __version__  # noqa: F401
 from .builder import (
     BuildException,
     DynamicBuilder,
+    EnvStatus,  # noqa: F401
     SimpleBuilder,
     find_factory_for_wrapping,
 )

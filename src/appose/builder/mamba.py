@@ -14,7 +14,7 @@ from pathlib import Path
 from ..environment import Environment
 from ..scheme import from_content as scheme_from_content
 from ..tool.mamba import Mamba
-from . import BaseBuilder, Builder, BuilderFactory, BuildException
+from . import BaseBuilder, Builder, BuilderFactory, BuildException, EnvStatus
 
 
 class MambaBuilder(BaseBuilder):
@@ -26,6 +26,16 @@ class MambaBuilder(BaseBuilder):
 
     def env_type(self) -> str:
         return "mamba"
+
+    def _has_environment(self, env_dir: Path) -> bool:
+        return (env_dir / "conda-meta").is_dir()
+
+    def _incompatibility(self, env_dir: Path) -> str | None:
+        if (env_dir / ".pixi").is_dir():
+            return "environment already managed by Pixi"
+        if (env_dir / "pyvenv.cfg").exists():
+            return "environment already managed by uv/venv"
+        return None
 
     def build(self) -> Environment:
         """
@@ -39,17 +49,7 @@ class MambaBuilder(BaseBuilder):
         """
         env_dir = self._resolve_env_dir()
 
-        # Check for incompatible existing environments
-        if (env_dir / ".pixi").is_dir():
-            raise BuildException(
-                self,
-                f"Cannot use MambaBuilder: environment already managed by Pixi at {env_dir}",
-            )
-        if (env_dir / "pyvenv.cfg").exists():
-            raise BuildException(
-                self,
-                f"Cannot use MambaBuilder: environment already managed by uv/venv at {env_dir}",
-            )
+        self._check_compatibility(env_dir)
 
         # Infer scheme from content if not explicitly set.
         if self._content is not None and self._scheme is None:
@@ -95,7 +95,7 @@ class MambaBuilder(BaseBuilder):
 
             # If the env state matches our current configuration,
             # skip all package management and return immediately.
-            if self._is_up_to_date(env_dir):
+            if self.status() == EnvStatus.CURRENT:
                 return self._create_environment(mamba, env_dir)
 
             if self._content is None:

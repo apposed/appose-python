@@ -15,7 +15,7 @@ from ..environment import Environment
 from ..scheme import from_content as scheme_from_content
 from ..scheme import from_name as scheme_from_name
 from ..tool.pixi import Pixi
-from . import BaseBuilder, Builder, BuilderFactory, BuildException
+from . import BaseBuilder, Builder, BuilderFactory, BuildException, EnvStatus
 from .pixi_install_monitor import PixiInstallMonitor
 
 
@@ -65,6 +65,16 @@ class PixiBuilder(BaseBuilder):
         state["condaPackages"] = list(self._conda_packages)
         state["pypiPackages"] = list(self._pypi_packages)
 
+    def _has_environment(self, env_dir: Path) -> bool:
+        return (env_dir / ".pixi" / "envs" / "default").is_dir()
+
+    def _incompatibility(self, env_dir: Path) -> str | None:
+        if (env_dir / "conda-meta").exists() and not (env_dir / ".pixi").exists():
+            return "environment already managed by Mamba/Conda"
+        if (env_dir / "pyvenv.cfg").exists():
+            return "environment already managed by uv/venv"
+        return None
+
     def build(self) -> Environment:
         """
         Build the Pixi environment.
@@ -77,17 +87,7 @@ class PixiBuilder(BaseBuilder):
         """
         env_dir = self._resolve_env_dir()
 
-        # Check for incompatible existing environments
-        if (env_dir / "conda-meta").exists() and not (env_dir / ".pixi").exists():
-            raise BuildException(
-                self,
-                f"Cannot use PixiBuilder: environment already managed by Mamba/Conda at {env_dir}",
-            )
-        if (env_dir / "pyvenv.cfg").exists():
-            raise BuildException(
-                self,
-                f"Cannot use PixiBuilder: environment already managed by uv/venv at {env_dir}",
-            )
+        self._check_compatibility(env_dir)
 
         # Validate content/scheme BEFORE installing any tools.
         if self._content is not None:
@@ -126,7 +126,7 @@ class PixiBuilder(BaseBuilder):
 
             # If the env state matches our current configuration,
             # skip all package management and return immediately.
-            if self._is_up_to_date(env_dir):
+            if self.status() == EnvStatus.CURRENT:
                 return self._build_pixi_environment(pixi, env_dir)
 
             # We are about to hit the network anyway; take the opportunity

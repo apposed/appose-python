@@ -15,7 +15,7 @@ from ..scheme import from_content as scheme_from_content
 from ..scheme import from_name as scheme_from_name
 from ..tool.uv import Uv
 from ..util.platform import is_windows
-from . import BaseBuilder, Builder, BuilderFactory, BuildException
+from . import BaseBuilder, Builder, BuilderFactory, BuildException, EnvStatus
 
 
 class UvBuilder(BaseBuilder):
@@ -64,6 +64,16 @@ class UvBuilder(BaseBuilder):
         state["pythonVersion"] = self._python_version
         state["packages"] = list(self._packages)
 
+    def _has_environment(self, env_dir: Path) -> bool:
+        return (env_dir / "pyvenv.cfg").is_file() or (env_dir / ".venv").is_dir()
+
+    def _incompatibility(self, env_dir: Path) -> str | None:
+        if (env_dir / ".pixi").is_dir():
+            return "environment already managed by Pixi"
+        if (env_dir / "conda-meta").is_dir():
+            return "environment already managed by Mamba/Conda"
+        return None
+
     def build(self) -> Environment:
         """
         Build the uv environment.
@@ -76,17 +86,7 @@ class UvBuilder(BaseBuilder):
         """
         env_dir = self._resolve_env_dir()
 
-        # Check for incompatible existing environments
-        if (env_dir / ".pixi").is_dir():
-            raise BuildException(
-                self,
-                f"Cannot use UvBuilder: environment already managed by Pixi at {env_dir}",
-            )
-        if (env_dir / "conda-meta").is_dir():
-            raise BuildException(
-                self,
-                f"Cannot use UvBuilder: environment already managed by Mamba/Conda at {env_dir}",
-            )
+        self._check_compatibility(env_dir)
 
         uv = Uv()
 
@@ -128,7 +128,7 @@ class UvBuilder(BaseBuilder):
 
             # If the env state matches our current configuration,
             # skip all package management and return immediately.
-            if self._is_up_to_date(env_dir):
+            if self.status() == EnvStatus.CURRENT:
                 return self._create_environment(env_dir)
 
             # Determine whether the venv already exists.
