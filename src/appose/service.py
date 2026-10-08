@@ -160,8 +160,8 @@ class Service:
         task to import it does, and pays any initialization cost.
 
         If called before the service starts, registration happens during
-        worker startup, before the init script (see init()), which may then
-        import the library itself. Otherwise, registration happens via a
+        worker startup, before the init script (see init()) runs, which may
+        then import the library itself. Otherwise, registration happens via a
         task, and this method blocks until it completes.
 
         Args:
@@ -222,6 +222,17 @@ class Service:
         script = self._syntax.import_library(name, files, path.as_posix(), package)
         return self._register_library(script)
 
+    def _write_startup_script(
+        self, script: str | None, prefix: str, env_var: str
+    ) -> None:
+        if not script:
+            return
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix=prefix, suffix=".txt", delete=False
+        ) as f:
+            f.write(script)
+            self._env_vars[env_var] = f.name
+
     def _register_library(self, script: str) -> Service:
         if self._process is None:
             self._libraries.append(script)
@@ -262,20 +273,15 @@ class Service:
 
         prefix = f"Appose-Service-{self._service_id}"
 
-        # If an init script is provided, write it to a temporary file
-        # and pass its path via environment variable. Library registrations
-        # come first, so that the init script can import those libraries.
-        init_script = "".join(self._libraries) + (self._init_script or "")
-        if init_script:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                prefix="appose-init-",
-                suffix=".txt",
-                delete=False,
-            ) as init_file:
-                init_file.write(init_script)
-                self._env_vars["APPOSE_INIT_SCRIPT"] = init_file.name
+        # If libraries or an init script are provided, write them to temporary
+        # files and pass their paths via environment variables. The worker
+        # registers the libraries first, so that the init script can use them.
+        self._write_startup_script(
+            "".join(self._libraries), "appose-libraries-", "APPOSE_LIBRARY_SCRIPT"
+        )
+        self._write_startup_script(
+            self._init_script, "appose-init-", "APPOSE_INIT_SCRIPT"
+        )
 
         self._process = process.builder(self._cwd, self._env_vars, *self._args)
         _track(self)

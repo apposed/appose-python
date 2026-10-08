@@ -341,30 +341,38 @@ class Worker:
                     task.fail("thread death")
 
 
-def main() -> None:
-    worker = Worker()
+def _run_startup_script(worker: Worker, env_var: str, label: str, export: bool):
+    script_path = os.environ.get(env_var)
+    if not script_path or not os.path.exists(script_path):
+        return
+    try:
+        # Execute the script in its own namespace.
+        namespace = {}
+        with open(script_path, "r", encoding="utf-8") as f:
+            code = f.read()
+        exec(code, namespace)  # noqa: S102 -- executing the requested startup script is intentional
 
-    # Execute init script if provided via environment variable.
-    # This happens before the worker's I/O loop starts, which is useful
-    # for imports that may interfere with stdin/stdout operations.
-    init_script_path = os.environ.get("APPOSE_INIT_SCRIPT")
-    if init_script_path and os.path.exists(init_script_path):
-        try:
-            # Execute init script in its own namespace.
-            init_namespace = {}
-            with open(init_script_path, "r", encoding="utf-8") as f:
-                init_code = f.read()
-            exec(init_code, init_namespace)  # noqa: S102 -- executing the requested init script is intentional
-
-            # Export all public (non-underscore) attributes to worker.
-            for key, value in init_namespace.items():
+        # Export all public (non-underscore) attributes to worker.
+        if export:
+            for key, value in namespace.items():
                 if not key.startswith("_"):
                     worker.exports[key] = value
 
-            # Clean up the temp file.
-            os.remove(init_script_path)
-        except BaseException as e:  # noqa: BLE001 -- init script failure must not prevent worker startup
-            print(f"[WARNING] Init script failed: {e}", file=sys.stderr)
+        # Clean up the temp file.
+        os.remove(script_path)
+    except BaseException as e:  # noqa: BLE001 -- startup script failure must not prevent worker startup
+        print(f"[WARNING] {label} script failed: {e}", file=sys.stderr)
+
+
+def main() -> None:
+    worker = Worker()
+
+    # Register libraries, then execute init script, if provided via
+    # environment variables. This happens before the worker's I/O loop
+    # starts, which is useful for imports that may interfere with
+    # stdin/stdout operations.
+    _run_startup_script(worker, "APPOSE_LIBRARY_SCRIPT", "Library", export=False)
+    _run_startup_script(worker, "APPOSE_INIT_SCRIPT", "Init", export=True)
 
     # On Windows, we must import numpy here on the main thread before opening stdin.
     # Otherwise, the import will hang, even if run as part of a task with queue="main".
