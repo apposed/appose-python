@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 import appose
+from appose.builder import EnvStatus
 from appose.builder.uv import UvBuilder
 from tests.test_base import cowsay_and_assert
 
@@ -77,6 +78,18 @@ def test_uv_pyproject_with_group():
 
     state = _read_state(env)
     assert state["groups"] == ["cowsay"]
+
+    # Wrapping (e.g. after an application restart) must retain the groups,
+    # rather than treating the environment as stale and syncing without them.
+    wrapped = appose.wrap(env.base())
+    assert isinstance(wrapped.builder(), UvBuilder)
+    assert wrapped.builder().status() == EnvStatus.CURRENT
+    cowsay_and_assert(wrapped, "wrapped")
+
+    # Rebuilding the wrapped environment must retain the groups too.
+    rebuilt = wrapped.rebuild()
+    cowsay_and_assert(rebuilt, "rebuilt")
+    assert _read_state(rebuilt)["groups"] == ["cowsay"]
 
 
 def test_uv_group_rejects_without_pyproject():

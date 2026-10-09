@@ -8,6 +8,7 @@ Type-safe builder for uv-based virtual environments.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ..environment import Environment
@@ -250,6 +251,17 @@ class UvBuilder(BaseBuilder):
             with open(pyproject_toml, "r", encoding="utf-8") as f:
                 self._content = f.read()
             self._scheme = scheme_from_name("pyproject.toml")
+
+            # Restore any dependency groups, which pyproject.toml does not record.
+            # Otherwise, the environment looks stale, and gets synced without them.
+            appose_json = env_path / "appose.json"
+            if not self._groups and appose_json.is_file():
+                try:
+                    state = json.loads(appose_json.read_text(encoding="utf-8"))
+                except ValueError:
+                    state = None  # Unreadable state; the env will just look stale.
+                if isinstance(state, dict) and isinstance(state.get("groups"), list):
+                    self._groups.extend(str(g) for g in state["groups"])
         else:
             # Fall back to requirements.txt
             requirements_txt = env_path / "requirements.txt"
