@@ -4,6 +4,7 @@
 
 """End-to-end tests for UvBuilder."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -54,3 +55,43 @@ def test_uv_pyproject():
     )
     assert isinstance(env.builder(), UvBuilder)
     cowsay_and_assert(env, "pyproject")
+
+    # No groups were requested, so none should be recorded.
+    state = _read_state(env)
+    assert "groups" not in state, (
+        "appose.json should not contain 'groups' when none specified"
+    )
+
+
+def test_uv_pyproject_with_group():
+    """Tests building from a pyproject.toml file with a dependency group."""
+    env = (
+        appose.uv()
+        .file(str(TEST_RESOURCES / "cowsay-pyproject-groups.toml"))
+        .group("cowsay")
+        .base("target/envs/uv-cowsay-groups")
+        .log_debug()
+        .build()
+    )
+    cowsay_and_assert(env, "groups")
+
+    state = _read_state(env)
+    assert state["groups"] == ["cowsay"]
+
+
+def test_uv_group_rejects_without_pyproject():
+    """Tests that dependency groups require the pyproject.toml scheme."""
+    with pytest.raises(ValueError):
+        (
+            appose.uv()
+            .content("appose\n")
+            .group("cowsay")
+            .base("target/envs/uv-group-no-pyproject")
+            .build()
+        )
+
+
+def _read_state(env) -> dict:
+    appose_json = Path(env.base()) / "appose.json"
+    assert appose_json.is_file(), "appose.json should exist"
+    return json.loads(appose_json.read_text(encoding="utf-8"))

@@ -209,7 +209,12 @@ class Uv(Tool):
             requirements_file,
         )
 
-    def sync(self, project_dir: Path, python_version: str | None = None) -> None:
+    def sync(
+        self,
+        project_dir: Path,
+        python_version: str | None = None,
+        groups: list[str] | None = None,
+    ) -> None:
         """
         Synchronize a project's dependencies from pyproject.toml.
         Create a virtual environment at projectDir/.venv and installs dependencies.
@@ -217,6 +222,7 @@ class Uv(Tool):
         Args:
             project_dir: The project directory containing pyproject.toml.
             python_version: Optional Python version (e.g., "3.11"). Can be None for default.
+            groups: Optional PEP 735 dependency groups to include. Can be None for none.
 
         Raises:
             IOError: If an I/O error occurs.
@@ -225,6 +231,8 @@ class Uv(Tool):
         args = ["sync"]
         if python_version:
             args.extend(["--python", python_version])
+        for group in groups or []:
+            args.extend(["--group", group])
 
         # Run uv sync with working directory set to projectDir
         self.exec(*args, cwd=project_dir)

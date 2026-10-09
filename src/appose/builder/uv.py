@@ -30,6 +30,7 @@ class UvBuilder(BaseBuilder):
         super().__init__()
         self._python_version: str | None = None
         self._packages: list[str] = []
+        self._groups: list[str] = []
 
     def python(self, version: str) -> UvBuilder:
         """
@@ -57,6 +58,20 @@ class UvBuilder(BaseBuilder):
         self._packages.extend(packages)
         return self
 
+    def group(self, *groups: str) -> UvBuilder:
+        """
+        Add PEP 735 dependency groups to install via `uv sync --group`.
+        Only supported with the pyproject.toml scheme.
+
+        Args:
+            groups: Dependency group names defined in [dependency-groups].
+
+        Returns:
+            This builder instance
+        """
+        self._groups.extend(groups)
+        return self
+
     def env_type(self) -> str:
         return "uv"
 
@@ -64,6 +79,8 @@ class UvBuilder(BaseBuilder):
         super()._add_state_fields(state)
         state["pythonVersion"] = self._python_version
         state["packages"] = list(self._packages)
+        if self._groups:
+            state["groups"] = list(self._groups)
         if self._adds_appose():
             # NB: Recorded, so that a change in Appose version triggers a rebuild.
             state["appose"] = appose_requirement().pip_args()
@@ -137,6 +154,14 @@ class UvBuilder(BaseBuilder):
                     f"UvBuilder only supports requirements.txt and pyproject.toml schemes, got: {self._scheme.name()}"
                 )
 
+        # Validate groups are only used with pyproject.toml.
+        if self._groups and (
+            self._scheme is None or self._scheme.name() != "pyproject.toml"
+        ):
+            raise ValueError(
+                "Dependency groups are only supported with pyproject.toml scheme"
+            )
+
         try:
             uv.install()
 
@@ -168,7 +193,7 @@ class UvBuilder(BaseBuilder):
                     pyproject_file.write_text(self._content, encoding="utf-8")
 
                     # Run uv sync to create .venv and install dependencies
-                    uv.sync(env_dir, self._python_version)
+                    uv.sync(env_dir, self._python_version, self._groups)
                 else:
                     # Handle requirements.txt - traditional venv + pip install
                     # Create virtual environment if it doesn't exist
