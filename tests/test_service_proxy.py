@@ -138,7 +138,7 @@ doubler.apply(Box(21))
 def test_service_proxy_shm():
     """Test a service object filling shared memory on behalf of the worker."""
     env = appose.system()
-    with env.python() as service:
+    with env.python().init("import numpy") as service:
         maybe_debug(service)
 
         class Source:
