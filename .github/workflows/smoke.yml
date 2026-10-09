@@ -1,0 +1,49 @@
+# Smoke test of the latest releases of appose-python and appose-java, as users
+# install them: appose from PyPI, and appose-java from Maven Central. Unlike the
+# main build, which tests the latest code of each against the other, this
+# catches problems with what has actually been published.
+
+name: smoke
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'zulu'
+
+    - name: Install released appose-python and appose-java
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install appose
+        mvn -B -f appose.pom dependency:copy-dependencies -DoutputDirectory="$RUNNER_TEMP/appose-java"
+
+    - name: Run the smoke test
+      shell: bash
+      # NB: Run from outside the source tree, so that Python imports the
+      # released appose, not the one in this repository.
+      working-directory: ${{ runner.temp }}
+      run: |
+        python "$GITHUB_WORKSPACE/.github/smoke/smoke.py" "$RUNNER_TEMP/appose-java"
