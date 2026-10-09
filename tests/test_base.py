@@ -122,6 +122,10 @@ def cowsay_and_assert(env: Environment, greeting: str):
         assert "(oo)" in actual, "Output should contain cow eyes"
         assert "||----w |" in actual, "Output should contain cow legs"
 
+        # Note: Wait for the worker to exit, so that it no longer holds the
+        # environment's files open; on Windows, that would block deleting them.
+        service.close(timeout=30)
+
 
 def source_override() -> dict[str, str]:
     """
