@@ -8,10 +8,15 @@ TODO
 
 from __future__ import annotations
 
+import ctypes
+import mmap
+import os
+import threading
 import warnings
+import weakref
 from math import prod
 from multiprocessing import resource_tracker, shared_memory
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .util import message
 
@@ -45,6 +50,8 @@ class SharedMemory(shared_memory.SharedMemory):
         super().__init__(name=name, create=create, size=rsize)
         self.rsize: int = rsize
         self._unlink_on_dispose: bool = create
+        if create:
+            _created.add(self.name)
         if message._worker_mode:
             # HACK: Remove this shared memory block from the resource_tracker,
             # which would otherwise want to clean up shared memory blocks
@@ -103,11 +110,127 @@ class SharedMemory(shared_memory.SharedMemory):
         """
         self._unlink_on_dispose = value
 
+    def view(self, offset: int = 0, length: int | None = None) -> SharedMemoryView:
+        """
+        Create a view of a region of this shared memory block.
+
+        The view keeps the block's memory mapped for as long as the view, or
+        any NumPy array built on it, is alive, even after the block is closed.
+
+        Args:
+            offset: The region's starting position within the block, in bytes.
+            length: The region's length in bytes, or None to extend it
+                to the end of the block's requested size.
+        """
+        if length is None:
+            length = self.rsize - offset
+        return SharedMemoryView(self._mmap, self.name, self.rsize, offset, length)
+
+    def unlink(self) -> None:
+        _created.discard(self.name)
+        if message._worker_mode:
+            # NB: This block was unregistered from the resource_tracker upon
+            # construction; unregistering it again would make the tracker
+            # complain. So we unlink it directly, as the superclass would.
+            _unlink_untracked(self._name)
+        else:
+            super().unlink()
+
+    def close(self) -> None:
+        try:
+            super().close()
+        except BufferError:
+            if self._buf is not None:
+                # Someone still uses this block's buffer directly.
+                raise
+            # NB: Views of this block still pin its mapping, which stays
+            # open until the last of them is garbage collected.
+            self._mmap = None
+            super().close()
+
+    def _detach(self) -> mmap.mmap:
+        """
+        Close this handle, but keep its memory mapping open, for use by views
+        of regions of the block. The mapping stays valid, even after the block
+        is unlinked, until the last object referencing it is garbage collected.
+        """
+        # HACK: Reach into the superclass's internals, since
+        # close() would refuse to unmap memory still in use.
+        mapping = self._mmap
+        self._buf.release()
+        self._buf = None
+        self._mmap = None
+        self.close()
+        return mapping
+
     def dispose(self) -> None:
         if self._unlink_on_dispose:
             self.unlink()
         else:
             self.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb) -> None:
+        self.dispose()
+
+
+class SharedMemoryView:
+    """
+    A region of a shared memory block: length bytes, starting offset bytes
+    into the block. Create one with SharedMemory.view(offset, length).
+
+    The view keeps the block's memory mapped for as long as the view, or any
+    NumPy array built on it (e.g. via numpy.asarray(view)), is alive.
+    """
+
+    def __init__(
+        self,
+        mapping: mmap.mmap,
+        name: str,
+        rsize: int,
+        offset: int,
+        length: int,
+    ):
+        _check_region(name, rsize, offset, length)
+        self.name: str = name
+        self.rsize: int = rsize
+        self.offset: int = offset
+        self.length: int = length
+        # NB: Pinning the region keeps the mapping open, and gives us its address.
+        self._pin = (ctypes.c_char * length).from_buffer(mapping, offset)
+
+    @property
+    def size(self) -> int:
+        return self.length
+
+    @property
+    def buf(self) -> memoryview:
+        return memoryview(self._pin).cast("B")
+
+    @property
+    def __array_interface__(self) -> dict[str, Any]:
+        # NB: Exposing the data by address, rather than by buffer, makes the
+        # NumPy arrays built on this view reference it (via their bases), and
+        # thus keeps the view alive exactly as long as any of those arrays.
+        return {
+            "version": 3,
+            "shape": (self.length,),
+            "typestr": "|u1",
+            "data": (ctypes.addressof(self._pin), False),
+        }
+
+    def dispose(self) -> None:
+        """
+        Do nothing: the mapping stays open until this view is garbage collected.
+        """
+
+    def __str__(self):
+        return (
+            f"SharedMemoryView(name='{self.name}', rsize={self.rsize}, "
+            f"offset={self.offset}, length={self.length})"
+        )
 
     def __enter__(self) -> Self:
         return self
@@ -123,7 +246,12 @@ class NDArray:
     a particular shape, and flattened into SharedMemory.
     """
 
-    def __init__(self, dtype: str, shape: list[int], shm: SharedMemory | None = None):
+    def __init__(
+        self,
+        dtype: str,
+        shape: list[int],
+        shm: SharedMemory | SharedMemoryView | None = None,
+    ):
         """
         Create an NDArray.
 
@@ -141,13 +269,12 @@ class NDArray:
         """
         self.dtype: str = _normalize_dtype(dtype)
         self.shape: list[int] = shape
-        self.shm: SharedMemory = (
-            SharedMemory(
-                create=True, rsize=prod(shape) * _bytes_per_element(self.dtype)
-            )
-            if shm is None
-            else shm
-        )
+        nbytes = prod(shape) * _bytes_per_element(self.dtype)
+        self.shm: SharedMemory | SharedMemoryView
+        if shm is not None:
+            self.shm = shm
+        else:
+            self.shm = SharedMemory(create=True, rsize=nbytes)
 
     def __str__(self):
         return (
@@ -167,9 +294,12 @@ class NDArray:
             import numpy
         except ModuleNotFoundError:
             raise ImportError("NumPy is not available.")
-        arr = numpy.ndarray(
-            prod(self.shape), dtype=self.dtype, buffer=self.shm.buf
-        ).reshape(self.shape)
+        if isinstance(self.shm, SharedMemoryView):
+            nbytes = prod(self.shape) * _bytes_per_element(self.dtype)
+            arr = numpy.asarray(self.shm)[:nbytes].view(self.dtype)
+        else:
+            arr = numpy.ndarray(prod(self.shape), dtype=self.dtype, buffer=self.shm.buf)
+        arr = arr.reshape(self.shape)
         if dtype is None:
             dtype = arr.dtype
         if copy is False and numpy.dtype(dtype) != arr.dtype:
@@ -208,7 +338,7 @@ class NDArray:
         """
         nda = cls(arr.dtype.name, list(arr.shape))
         try:
-            nda.__array__()[:] = arr
+            nda.__array__()[...] = arr
         except BaseException:
             nda.shm.dispose()
             raise
@@ -221,18 +351,97 @@ class NDArray:
         self.shm.dispose()
 
 
-message.register(
+message.register_encoder(
     SharedMemory,
     "shm",
     lambda shm: {"name": shm.name, "rsize": shm.rsize},
-    lambda m: SharedMemory(name=m["name"], rsize=m["rsize"]),
 )
-message.register(
+message.register_encoder(
+    SharedMemoryView,
+    "shm",
+    lambda view: {
+        "name": view.name,
+        "rsize": view.rsize,
+        "offset": view.offset,
+        "length": view.length,
+    },
+)
+message.register_encoder(
     NDArray,
     "ndarray",
     lambda nda: {"dtype": nda.dtype, "shape": nda.shape, "shm": nda.shm},
-    lambda m: NDArray(m["dtype"], m["shape"], m["shm"]),
 )
+
+
+# Names of the shared memory blocks created by this process, not yet unlinked.
+_created: set[str] = set()
+
+# Memory mappings of shared memory blocks attached by this process, by name,
+# so that all regions of a block share one mapping. An entry lasts as long as
+# any view of its block (or any NumPy array built on one) is alive.
+_mappings: weakref.WeakValueDictionary[str, mmap.mmap] = weakref.WeakValueDictionary()
+_mappings_lock = threading.Lock()
+
+
+def _check_region(name: str, rsize: int, offset: int, length: int) -> None:
+    if offset < 0 or length < 0 or offset + length > max(rsize, 1):
+        raise ValueError(
+            f"Region [{offset}, {offset + length}) does not fit "
+            f"in shared memory block {name} of size {rsize}"
+        )
+
+
+def _attach_view(name: str, rsize: int, offset: int, length: int) -> SharedMemoryView:
+    """
+    Attach to a region of the named shared memory block. All regions of a
+    block attached by this process share one mapping of it.
+    """
+    with _mappings_lock:
+        mapping = _mappings.get(name)
+        if mapping is None:
+            block = SharedMemory(name=name, rsize=rsize)
+            if not message._worker_mode and os.name == "posix" and name not in _created:
+                # NB: The block's creator unlinks it, not this process.
+                resource_tracker.unregister(block._name, "shared_memory")
+            mapping = block._detach()
+            _mappings[name] = mapping
+    return SharedMemoryView(mapping, name, rsize, offset, length)
+
+
+def _decode_shm(m: dict[str, Any]):
+    """
+    Decode a shared memory reference: a whole block, or a region of one.
+    """
+    if not any(key in m for key in ("offset", "length")):
+        # A plain block reference, as always.
+        return SharedMemory(name=m["name"], rsize=m["rsize"])
+    name, rsize = m["name"], m["rsize"]
+    offset = m.get("offset", 0)
+    length = m.get("length", rsize - offset)
+    _check_region(name, rsize, offset, length)
+    return _attach_view(name, rsize, offset, length)
+
+
+def _decode_ndarray(m: dict[str, Any]):
+    """
+    Decode an array, which can be viewed as a NumPy array via
+    numpy.asarray(nda).
+    """
+    return NDArray(m["dtype"], m["shape"], m["shm"])
+
+
+def _unlink_untracked(name: str) -> None:
+    """
+    Unlink the named shared memory block (on POSIX; elsewhere, a block
+    lives until its last handle is closed), bypassing the resource tracker.
+    """
+    if os.name == "posix":
+        import _posixshmem
+
+        try:
+            _posixshmem.shm_unlink(name)
+        except FileNotFoundError:
+            pass
 
 
 # Standard dtype names, with the number of bytes per element of each.

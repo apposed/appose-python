@@ -2,12 +2,22 @@
 # Copyright (C) 2023 - 2026 Appose developers.
 # SPDX-License-Identifier: BSD-2-Clause
 
+import ctypes
+import json
+
 import numpy
 import pytest
 
 import appose
 from appose.service import TaskStatus
-from appose.shm import _bytes_per_element, _normalize_dtype
+from appose.shm import (
+    NDArray,
+    SharedMemory,
+    SharedMemoryView,
+    _bytes_per_element,
+    _normalize_dtype,
+)
+from appose.util import message
 
 ndarray_inspect = """
 task.outputs["rsize"] = data.shm.rsize
@@ -188,3 +198,34 @@ def test_ndarray_deprecated():
             arr = data.ndarray()
         arr[0] = 9
         assert 9 == numpy.asarray(data)[0]
+
+
+def test_region_round_trip():
+    """An unmanaged region of a block encodes as such, and decodes to a view of it."""
+    with SharedMemory(create=True, rsize=64) as block:
+        block.buf[16:24] = bytes(range(8))
+        region = block.view(16, 8)
+        encoded = message.encode({"nda": NDArray("uint8", [2, 4], region)})
+        shm = json.loads(encoded)["nda"]["shm"]
+        assert shm["offset"] == 16 and shm["length"] == 8
+        assert "managed" not in shm
+
+        nda = message.decode(encoded)["nda"]
+        assert isinstance(nda, NDArray)
+        assert isinstance(nda.shm, SharedMemoryView)
+        assert numpy.asarray(nda).tolist() == [[0, 1, 2, 3], [4, 5, 6, 7]]
+
+        # Regions of one block share a single mapping.
+        other = message.decode(message.encode({"shm": block.view(0, 16)}))["shm"]
+        assert isinstance(other, SharedMemoryView)
+        base = ctypes.addressof(nda.shm._pin) - nda.shm.offset
+        assert ctypes.addressof(other._pin) - other.offset == base
+        del nda, other, region
+
+
+def test_region_bounds():
+    with (
+        SharedMemory(create=True, rsize=64) as block,
+        pytest.raises(ValueError, match="does not fit"),
+    ):
+        block.view(60, 8)

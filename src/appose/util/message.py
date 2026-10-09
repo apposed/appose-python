@@ -37,8 +37,22 @@ def register(obj_type: type, appose_type: str, encoder, decoder) -> None:
     :param encoder: Callable ``(obj) -> JSON-compatible value``.
     :param decoder: Callable ``(data) -> obj``.
     """
-    _encoders[obj_type] = (appose_type, encoder)
+    register_encoder(obj_type, appose_type, encoder)
     _decoders[appose_type] = decoder
+
+
+def register_encoder(obj_type: type, appose_type: str, encoder) -> None:
+    """
+    Register an encoder function for a custom Appose type, without a decoder.
+
+    This allows several Python types to encode as the same ``appose_type``,
+    which decodes as whatever the decoder registered for it produces.
+
+    :param obj_type: The Python type to encode.
+    :param appose_type: The ``appose_type`` string used on the wire.
+    :param encoder: Callable ``(obj) -> JSON-compatible value``.
+    """
+    _encoders[obj_type] = (appose_type, encoder)
 
 
 # Flag indicating whether this process is running as an Appose worker.
@@ -151,6 +165,14 @@ class _ApposeJSONEncoder(json.JSONEncoder):
 
 def _appose_object_hook(obj: dict):
     atype = obj.get("appose_type")
+    if atype == "shm":
+        from ..shm import _decode_shm
+
+        return _decode_shm(obj)
+    if atype == "ndarray":
+        from ..shm import _decode_ndarray
+
+        return _decode_ndarray(obj)
     if atype == "worker_object":
         # Keep worker_object dicts as-is for now.
         # They will be converted to proxies by proxify_worker_objects().
