@@ -79,6 +79,12 @@ class MessageTest(unittest.TestCase):
             expected = self.JSON.replace("SHM_NAME", shm_name)
             self.assertEqual(expected, json_str)
 
+    def test_encode_numpy_scalars(self):
+        import numpy
+
+        data = {"f": numpy.float32(2.5), "i": numpy.int64(3), "b": numpy.bool_(True)}
+        self.assertEqual('{"f":2.5,"i":3,"b":true}', message.encode(data))
+
     def test_decode(self):
         with appose.SharedMemory(create=True, rsize=4000) as shm:
             shm_name = shm.name
