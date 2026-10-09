@@ -156,8 +156,9 @@ class Pixi(Tool):
         recording the current time as the latest check if so.
         """
         stamp = Path(self.command).parent / "last-update-check"
+        now = time.time()
         try:
-            elapsed = time.time() - stamp.stat().st_mtime
+            elapsed = now - stamp.stat().st_mtime
             if 0 <= elapsed < self.UPDATE_INTERVAL:
                 return False
         except OSError:
@@ -166,6 +167,9 @@ class Pixi(Tool):
             # Note: Record the check even if it fails, so that
             # being offline does not cause a failed check every time.
             stamp.touch()
+            # Note: Stamp the time we compare against, not the filesystem's
+            # own, which can run ahead of time.time() (e.g. on Windows).
+            os.utime(stamp, (now, now))
         except OSError:
             pass
         return True
