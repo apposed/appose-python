@@ -16,13 +16,16 @@ SIBLING_APPOSE_JAVA = Path("../appose-java/target/classes")
 def groovy_class_path(monkeypatch) -> list[str]:
     """
     Class path for Groovy workers: a sibling appose-java build, if present (as
-    appose-java's tests do for appose-python), ahead of the appose-java release
-    fetched by bin/test.sh.
+    appose-java's tests do for appose-python, and as CI arranges), else the
+    appose-java release fetched by bin/test.sh.
     """
-    class_path = ["target/dependency/*"]
-    if SIBLING_APPOSE_JAVA.is_dir():
-        class_path.insert(0, str(SIBLING_APPOSE_JAVA.resolve()))
-    else:
+    if not SIBLING_APPOSE_JAVA.is_dir():
         # NB: The released appose-java need not match the appose-python under test.
         monkeypatch.setenv("APPOSE_SKIP_VERSION_CHECK", "1")
-    return class_path
+        return ["target/dependency/*"]
+    # Prefer the sibling's own dependencies, which match its pom.xml, if built
+    # (e.g. via mvn dependency:copy-dependencies, as CI does).
+    dependencies = SIBLING_APPOSE_JAVA.parent / "dependency"
+    if not dependencies.is_dir():
+        dependencies = Path("target/dependency")
+    return [str(SIBLING_APPOSE_JAVA.resolve()), str(dependencies.resolve() / "*")]

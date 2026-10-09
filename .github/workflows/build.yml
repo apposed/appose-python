@@ -109,6 +109,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-mamba-pkgs-
 
+    - name: Check out and build appose-java
+      shell: bash
+      run: |
+        .github/checkout-sibling.sh appose-java
+        mvn -B -f ../appose-java/pom.xml -DskipTests compile dependency:copy-dependencies
+
     - name: Run the tests
       shell: bash
       env:

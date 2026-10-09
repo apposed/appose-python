@@ -10,7 +10,8 @@ set -e
 dir=$(dirname "$0")
 cd "$dir/.."
 
-if [ ! -d target/dependency ]
+# NB: Needed only without a built sibling appose-java (see tests/conftest.py).
+if [ ! -d target/dependency ] && [ ! -d ../appose-java/target/dependency ]
 then
   echo "==> Installing appose-java..."
   mvn -f appose.pom dependency:copy-dependencies
