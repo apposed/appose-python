@@ -4,14 +4,16 @@
 
 """End-to-end tests for PixiBuilder."""
 
+import json
 import shutil
 from pathlib import Path
 
 import pytest
 
 import appose
-from appose.builder import BuildException
+from appose.builder import BuildException, EnvStatus
 from appose.builder.pixi import PixiBuilder
+from appose.util.filepath import delete_recursively
 from tests.test_base import cowsay_and_assert
 
 # Get the path to test resources
@@ -244,3 +246,178 @@ cowsay = "==6.1"
 
     assert isinstance(env.builder(), PixiBuilder)
     cowsay_and_assert(env, "toml!")
+
+
+# -- Lock-file reproducible builds --
+
+
+def test_pixi_locked():
+    """
+    A user-supplied lock is copied into the env dir and the install runs with
+    --locked, yielding a working environment. Exercises both lock_file()
+    and lock_url().
+    """
+    # First, build without a lock to generate a valid pixi.lock for the manifest.
+    base_a = Path("target/envs/pixi-lock-src")
+    _build_unlocked(base_a)
+    lock_file_a = base_a / "pixi.lock"
+    assert lock_file_a.is_file(), "first build should generate a pixi.lock"
+
+    # lock_file(): lock copied in, install runs --locked.
+    base_b = Path("target/envs/pixi-lock-file")
+    delete_recursively(base_b)
+    env_b = (
+        appose.pixi(TEST_RESOURCES / "cowsay-pixi.toml")
+        .base(base_b)
+        .lock_file(lock_file_a)
+        .log_debug()
+        .build()
+    )
+    assert (base_b / "pixi.lock").is_file(), "lock should be copied into the env dir"
+    assert "lockHash" in _read_state(env_b)
+    cowsay_and_assert(env_b, "locked")
+
+    # lock_url(): same outcome via a file:// URL.
+    base_c = Path("target/envs/pixi-lock-url")
+    delete_recursively(base_c)
+    env_c = (
+        appose.pixi(TEST_RESOURCES / "cowsay-pixi.toml")
+        .base(base_c)
+        .lock_url(lock_file_a.absolute().as_uri())
+        .log_debug()
+        .build()
+    )
+    assert "lockHash" in _read_state(env_c)
+    cowsay_and_assert(env_c, "url-lock")
+
+
+def test_pixi_lock_stale_fails():
+    """
+    A lock that is out of date with the manifest must be rejected by
+    --locked. (Without --locked, pixi would update the lock and succeed.)
+    """
+    # A valid lock for the cowsay manifest...
+    base_a = Path("target/envs/pixi-stale-src")
+    _build_unlocked(base_a)
+    cowsay_lock = (base_a / "pixi.lock").read_text(encoding="utf-8")
+
+    # ...is stale for the same workspace additionally requiring `requests`.
+    pixi_extra = (TEST_RESOURCES / "cowsay-pixi.toml").read_text(
+        encoding="utf-8"
+    ) + 'requests = "*"\n'
+    base = Path("target/envs/pixi-lock-stale")
+    delete_recursively(base)
+    with pytest.raises(BuildException):
+        (
+            appose.pixi()
+            .content(pixi_extra)
+            .base(base)
+            .lock_content(cowsay_lock)
+            .log_debug()
+            .build()
+        )
+
+
+def test_pixi_no_lock_backward_compat():
+    """
+    When no lock is supplied, appose.json must not contain a lockHash key,
+    so existing environments are never spuriously rebuilt.
+    """
+    env = _build_unlocked(Path("target/envs/pixi-no-lock"))
+    assert "lockHash" not in _read_state(env)
+    cowsay_and_assert(env, "nolock")
+
+
+def test_pixi_lock_change_triggers_rebuild():
+    """
+    Changing the lock content must change the lockHash in appose.json and
+    thus force a rebuild. The lock is edited with a trailing comment, which
+    doesn't change the resolved package set, so --locked still succeeds.
+    """
+    base_a = Path("target/envs/pixi-lock-change-src")
+    _build_unlocked(base_a)
+    lock = (base_a / "pixi.lock").read_text(encoding="utf-8")
+
+    base = Path("target/envs/pixi-lock-change")
+    delete_recursively(base)
+    env = (
+        appose.pixi(TEST_RESOURCES / "cowsay-pixi.toml")
+        .base(base)
+        .lock_content(lock)
+        .log_debug()
+        .build()
+    )
+    hash_before = _read_state(env)["lockHash"]
+
+    env = (
+        appose.pixi(TEST_RESOURCES / "cowsay-pixi.toml")
+        .base(base)
+        .lock_content(lock + "# trailing comment\n")
+        .log_debug()
+        .build()
+    )
+    hash_after = _read_state(env)["lockHash"]
+    assert hash_before != hash_after
+
+
+def test_pixi_wrap_lock_survives_rebuild():
+    """
+    wrap() captures the lock file into builder state, so rebuild() reproduces
+    the locked environment even after its directory has been deleted.
+    """
+    src_base = Path("target/envs/pixi-wrap-src")
+    _build_unlocked(src_base)
+    lock = (src_base / "pixi.lock").read_text(encoding="utf-8")
+
+    base = Path("target/envs/pixi-wrap-locked")
+    delete_recursively(base)
+    (
+        appose.pixi(TEST_RESOURCES / "cowsay-pixi.toml")
+        .base(base)
+        .lock_content(lock)
+        .log_debug()
+        .build()
+    )
+
+    # Wrap the locked env (capturing pixi.toml + pixi.lock), then wipe + rebuild.
+    env = appose.wrap(base)
+    assert isinstance(env.builder(), PixiBuilder)
+    assert env.builder().status() == EnvStatus.CURRENT
+    rebuilt = env.rebuild()
+    assert "lockHash" in _read_state(rebuilt), (
+        "rebuild after wrap must reproduce lockHash from the captured lock"
+    )
+    cowsay_and_assert(rebuilt, "rewrapped")
+
+
+def test_pixi_wrap_ignores_unrequested_lock():
+    """
+    pixi install writes a pixi.lock even when no lock is supplied. Wrapping
+    such an environment must not adopt that lock, or the env would look
+    stale, and rebuild() would install from a lock never asked for.
+    """
+    base = Path("target/envs/pixi-wrap-unlocked")
+    _build_unlocked(base)
+    assert (base / "pixi.lock").is_file(), "pixi install should generate a pixi.lock"
+
+    env = appose.wrap(base)
+    assert env.builder().status() == EnvStatus.CURRENT
+    rebuilt = env.rebuild()
+    assert "lockHash" not in _read_state(rebuilt), (
+        "rebuild after wrap must not lock to the generated pixi.lock"
+    )
+    cowsay_and_assert(rebuilt, "unlocked")
+
+
+def _read_state(env) -> dict:
+    appose_json = Path(env.base()) / "appose.json"
+    assert appose_json.is_file(), "appose.json should exist"
+    return json.loads(appose_json.read_text(encoding="utf-8"))
+
+
+def _build_unlocked(base: Path):
+    """Build the cowsay environment from scratch, without a lock."""
+    delete_recursively(base)
+    return (
+        appose.pixi(TEST_RESOURCES / "cowsay-pixi.toml").base(base).log_debug().build()
+    )

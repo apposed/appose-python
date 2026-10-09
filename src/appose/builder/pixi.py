@@ -112,6 +112,27 @@ class PixiBuilder(BaseBuilder):
                     f"PixiBuilder only supports pixi.toml, pyproject.toml, and environment.yml schemes, got: {self._scheme.name()}"
                 )
 
+        # Validate lock-file compatibility. pixi lockfiles apply to manifest-
+        # based builds (pixi.toml / pyproject.toml); programmatic builds and
+        # imported environment.yml have no user manifest to lock against.
+        if self._lock_content is not None:
+            if self._content is None:
+                raise ValueError(
+                    "PixiBuilder lock files require a declaration file via file()/content(); "
+                    "programmatic builds cannot be locked."
+                )
+            if self._scheme.name() not in ["pixi.toml", "pyproject.toml"]:
+                raise ValueError(
+                    "PixiBuilder lock files require a pixi.toml or pyproject.toml declaration; "
+                    "environment.yml imports have no lockfile mechanism."
+                )
+            # Note: adding channels re-resolves the manifest and rewrites the lock.
+            if self._channels:
+                raise ValueError(
+                    "PixiBuilder lock files cannot be combined with programmatic channels; "
+                    "declare the channels in the manifest instead."
+                )
+
         pixi = Pixi()
 
         # Set up progress/output consumers
@@ -186,6 +207,12 @@ class PixiBuilder(BaseBuilder):
                             str(env_dir.absolute()),
                         )
 
+                # If a lock file was provided, copy it into the env dir so the
+                # subsequent install runs strictly from it (--locked).
+                if self._lock_content is not None:
+                    pixi_lock_file = env_dir / "pixi.lock"
+                    pixi_lock_file.write_text(self._lock_content, encoding="utf-8")
+
                 # Add any programmatic channels to augment source file
                 if self._channels:
                     pixi.add_channels(env_dir, *self._channels)
@@ -256,6 +283,7 @@ class PixiBuilder(BaseBuilder):
                 with open(pyproject_toml, "r", encoding="utf-8") as f:
                     self._content = f.read()
                 self._scheme = scheme_from_name("pyproject.toml")
+        self._restore_lock_content(env_path, "pixi.lock")
 
         # Set the base directory and build (which will detect existing env)
         self.base(env_path)
@@ -283,9 +311,14 @@ class PixiBuilder(BaseBuilder):
             )
             pixi.set_error_consumer(monitor.intercept)
 
-        # Ensure the pixi environment is fully installed.
+        # Ensure the pixi environment is fully installed. When a lock was
+        # provided, pass --locked so pixi installs exactly what pixi.lock
+        # specifies, failing if the lock is out of date with the manifest.
+        args = ["install", "--manifest-path", str(manifest_file.absolute())]
+        if self._lock_content is not None:
+            args.append("--locked")
         try:
-            pixi.exec("install", "--manifest-path", str(manifest_file.absolute()))
+            pixi.exec(*args)
         finally:
             if monitor is not None:
                 monitor.shutdown()

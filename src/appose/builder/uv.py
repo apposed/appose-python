@@ -8,7 +8,6 @@ Type-safe builder for uv-based virtual environments.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ..environment import Environment
@@ -163,6 +162,21 @@ class UvBuilder(BaseBuilder):
                 "Dependency groups are only supported with pyproject.toml scheme"
             )
 
+        # Validate lock-file compatibility. uv lockfiles only apply to the
+        # pyproject.toml / uv sync path: requirements.txt uses pip install (no
+        # lockfile), and programmatic builds have no manifest to lock against.
+        if self._lock_content is not None:
+            if self._content is None:
+                raise ValueError(
+                    "UvBuilder lock files require a declaration file via file()/content(); "
+                    "programmatic builds cannot be locked."
+                )
+            if self._scheme.name() != "pyproject.toml":
+                raise ValueError(
+                    "UvBuilder lock files require a pyproject.toml declaration; "
+                    "requirements.txt has no lockfile mechanism."
+                )
+
         try:
             uv.install()
 
@@ -193,8 +207,15 @@ class UvBuilder(BaseBuilder):
                     pyproject_file = env_dir / "pyproject.toml"
                     pyproject_file.write_text(self._content, encoding="utf-8")
 
+                    # If a lock file was provided, copy it into the env dir and
+                    # install strictly from it (--locked) for reproducibility.
+                    locked = self._lock_content is not None
+                    if locked:
+                        uv_lock_file = env_dir / "uv.lock"
+                        uv_lock_file.write_text(self._lock_content, encoding="utf-8")
+
                     # Run uv sync to create .venv and install dependencies
-                    uv.sync(env_dir, self._python_version, self._groups)
+                    uv.sync(env_dir, self._python_version, self._groups, locked)
                 else:
                     # Handle requirements.txt - traditional venv + pip install
                     # Create virtual environment if it doesn't exist
@@ -254,14 +275,12 @@ class UvBuilder(BaseBuilder):
 
             # Restore any dependency groups, which pyproject.toml does not record.
             # Otherwise, the environment looks stale, and gets synced without them.
-            appose_json = env_path / "appose.json"
-            if not self._groups and appose_json.is_file():
-                try:
-                    state = json.loads(appose_json.read_text(encoding="utf-8"))
-                except ValueError:
-                    state = None  # Unreadable state; the env will just look stale.
-                if isinstance(state, dict) and isinstance(state.get("groups"), list):
-                    self._groups.extend(str(g) for g in state["groups"])
+            state = None if self._groups else self._read_appose_state(env_path)
+            if state is not None and isinstance(state.get("groups"), list):
+                self._groups.extend(str(g) for g in state["groups"])
+
+            # Likewise, restore the lock file, if the env was built from one.
+            self._restore_lock_content(env_path, "uv.lock")
         else:
             # Fall back to requirements.txt
             requirements_txt = env_path / "requirements.txt"

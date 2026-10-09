@@ -27,6 +27,10 @@ class MambaBuilder(BaseBuilder):
     def env_type(self) -> str:
         return "mamba"
 
+    def lock_content(self, lock_content: str) -> MambaBuilder:
+        """MambaBuilder does not yet support lock files."""
+        raise NotImplementedError("MambaBuilder does not yet support lock files")
+
     def _has_environment(self, env_dir: Path) -> bool:
         return (env_dir / "conda-meta").is_dir()
 

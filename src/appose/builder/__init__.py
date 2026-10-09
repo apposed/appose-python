@@ -12,6 +12,7 @@ environments.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -268,10 +269,7 @@ class Builder(ABC):
             BuildException: If the file cannot be read
         """
         try:
-            file_path = Path(path)
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return self.content(content)
+            return self.content(_read_file(path))
         except Exception as e:  # noqa: BLE001 -- any read failure is wrapped as a BuildException
             raise BuildException(self, cause=e)
 
@@ -291,9 +289,7 @@ class Builder(ABC):
             BuildException: If the URL cannot be read
         """
         try:
-            with urlopen(url) as response:
-                content = response.read().decode("utf-8")
-            return self.content(content)
+            return self.content(_read_url(url))
         except Exception as e:  # noqa: BLE001 -- any fetch failure is wrapped as a BuildException
             raise BuildException(self, cause=e)
 
@@ -311,6 +307,70 @@ class Builder(ABC):
             This builder instance, for fluent-style programming
         """
         ...
+
+    def lock_file(self, path: str | Path) -> Builder:
+        """
+        Specify a lock file for reproducible builds.
+
+        Reads the file content immediately and delegates to lock_content().
+
+        Args:
+            path: Path to the lock file (e.g., "uv.lock", "pixi.lock")
+
+        Returns:
+            This builder instance, for fluent-style programming
+
+        Raises:
+            BuildException: If the file cannot be read
+        """
+        try:
+            lock = _read_file(path)
+        except Exception as e:  # noqa: BLE001 -- any read failure is wrapped as a BuildException
+            raise BuildException(self, cause=e)
+        return self.lock_content(lock)
+
+    def lock_url(self, url: str) -> Builder:
+        """
+        Specify a URL to fetch lock file content from for reproducible builds.
+
+        Reads the URL content immediately and delegates to lock_content().
+
+        Args:
+            url: URL to the lock file
+
+        Returns:
+            This builder instance, for fluent-style programming
+
+        Raises:
+            BuildException: If the URL cannot be read
+        """
+        try:
+            lock = _read_url(url)
+        except Exception as e:  # noqa: BLE001 -- any fetch failure is wrapped as a BuildException
+            raise BuildException(self, cause=e)
+        return self.lock_content(lock)
+
+    def lock_content(self, lock_content: str) -> Builder:
+        """
+        Specify lock file content for reproducible builds.
+
+        When provided, the lock file is copied into the environment directory,
+        and the environment is installed strictly from it (via --locked),
+        failing if the lock is out of date with the configuration file.
+
+        Not all builders support lock files; builders that do not will raise
+        NotImplementedError.
+
+        Args:
+            lock_content: Lock file content (e.g., uv.lock, pixi.lock)
+
+        Returns:
+            This builder instance, for fluent-style programming
+
+        Raises:
+            NotImplementedError: If this builder does not support lock files
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support lock files")
 
     @abstractmethod
     def scheme(self, scheme: str) -> Builder:
@@ -482,6 +542,7 @@ class BaseBuilder(Builder):
         self._env_name: str | None = None
         self._env_dir: Path | None = None
         self._content: str | None = None
+        self._lock_content: str | None = None
         self._scheme: Scheme | None = None
 
     def delete(self) -> None:
@@ -547,6 +608,11 @@ class BaseBuilder(Builder):
         self._content = content
         return self
 
+    def lock_content(self, lock_content: str) -> BaseBuilder:
+        """Set lock file content."""
+        self._lock_content = lock_content
+        return self
+
     def scheme(self, scheme: str | Scheme) -> BaseBuilder:
         """Set the explicit scheme."""
         self._scheme = (
@@ -588,6 +654,11 @@ class BaseBuilder(Builder):
         state["channels"] = list(self._channels)
         state["flags"] = list(self._flags)
         state["envVars"] = dict(sorted(self._env_vars.items()))
+        # Record a hash of the lock file content, so that lock changes trigger
+        # a rebuild. Only added when a lock is supplied, so that lock-less
+        # builds produce the same appose.json as before lock file support.
+        if self._lock_content is not None:
+            state["lockHash"] = _lock_hash(self._lock_content)
 
     def _build_state_string(self) -> str:
         """Build deterministic JSON string of current builder state."""
@@ -609,6 +680,41 @@ class BaseBuilder(Builder):
         """Write current builder state to appose.json after a successful build."""
         appose_json = env_dir / "appose.json"
         appose_json.write_text(self._build_state_string(), encoding="utf-8")
+
+    @staticmethod
+    def _read_appose_state(env_dir: Path) -> dict | None:
+        """
+        Read the builder state recorded in appose.json in the given directory.
+
+        Returns:
+            The recorded state, or None if absent or unreadable.
+        """
+        appose_json = env_dir / "appose.json"
+        if not appose_json.is_file():
+            return None
+        try:
+            state = json.loads(appose_json.read_text(encoding="utf-8"))
+        except ValueError:
+            return None  # Unreadable state; the env will just look stale.
+        return state if isinstance(state, dict) else None
+
+    def _restore_lock_content(self, env_dir: Path, lock_file_name: str) -> None:
+        """
+        Restore the lock file content of a wrapped environment, so that
+        rebuild() reproduces it even after the directory is deleted.
+
+        Note: package managers write a lock file even for lock-less builds,
+        so the lock is only restored if appose.json records that the
+        environment was built from one.
+        """
+        if self._lock_content is not None:
+            return
+        state = self._read_appose_state(env_dir)
+        if state is None or "lockHash" not in state:
+            return
+        lock_file = env_dir / lock_file_name
+        if lock_file.is_file():
+            self._lock_content = lock_file.read_text(encoding="utf-8")
 
     def _has_environment(self, env_dir: Path) -> bool:
         """
@@ -853,6 +959,13 @@ class SimpleBuilder(BaseBuilder):
             "It uses existing executables without package management."
         )
 
+    def lock_content(self, lock_content: str) -> SimpleBuilder:
+        """SimpleBuilder does not support lock files."""
+        raise NotImplementedError(
+            "SimpleBuilder does not support lock files. "
+            "Custom environments use existing executables without package management."
+        )
+
     def _resolve_env_dir(self) -> Path:
         """Override to default to current directory."""
         return self._env_dir if self._env_dir else Path(".")
@@ -913,6 +1026,9 @@ class DynamicBuilder(BaseBuilder):
             delegate.content(self._content)
         if self._scheme:
             delegate.scheme(self._scheme.name())
+        # Note: builders that do not support lock files raise here.
+        if self._lock_content is not None:
+            delegate.lock_content(self._lock_content)
         delegate.channels(*self._channels)
         delegate.flags(*self._flags)
         for subscriber in self._progress_subscribers:
@@ -944,6 +1060,25 @@ class DynamicBuilder(BaseBuilder):
             return factory.create_builder()
 
         raise ValueError("Content and/or scheme must be provided for dynamic builder")
+
+
+def _read_file(path: str | Path) -> str:
+    """Read the given file's content as a UTF-8 string."""
+    return Path(path).read_text(encoding="utf-8")
+
+
+def _read_url(url: str) -> str:
+    """Read the given URL's content as a UTF-8 string."""
+    with urlopen(url) as response:
+        return response.read().decode("utf-8")
+
+
+def _lock_hash(content: str) -> str:
+    """
+    Compute the SHA-256 hash (lowercase hex) of the given lock file content,
+    to record in appose.json without storing the (potentially large) lock.
+    """
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 _BUILDERS: list[BuilderFactory] | None = None

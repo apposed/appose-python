@@ -214,6 +214,7 @@ class Uv(Tool):
         project_dir: Path,
         python_version: str | None = None,
         groups: list[str] | None = None,
+        locked: bool = False,
     ) -> None:
         """
         Synchronize a project's dependencies from pyproject.toml.
@@ -223,6 +224,9 @@ class Uv(Tool):
             project_dir: The project directory containing pyproject.toml.
             python_version: Optional Python version (e.g., "3.11"). Can be None for default.
             groups: Optional PEP 735 dependency groups to include. Can be None for none.
+            locked: If True, pass --locked, so uv installs from the existing
+                lockfile (uv.lock), failing if it is missing or out of date
+                relative to pyproject.toml.
 
         Raises:
             IOError: If an I/O error occurs.
@@ -233,6 +237,8 @@ class Uv(Tool):
             args.extend(["--python", python_version])
         for group in groups or []:
             args.extend(["--group", group])
+        if locked:
+            args.append("--locked")
 
         # Run uv sync with working directory set to projectDir
         self.exec(*args, cwd=project_dir)
