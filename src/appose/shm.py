@@ -16,7 +16,7 @@ import warnings
 import weakref
 from math import prod
 from multiprocessing import resource_tracker, shared_memory
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from .util import message
 
@@ -183,6 +183,9 @@ class SharedMemoryView:
 
     The view keeps the block's memory mapped for as long as the view, or any
     NumPy array built on it (e.g. via numpy.asarray(view)), is alive.
+
+    A view of a managed region (see NDArray) holds a reference to the region,
+    which it gives up once disposed of or garbage collected.
     """
 
     def __init__(
@@ -192,14 +195,20 @@ class SharedMemoryView:
         rsize: int,
         offset: int,
         length: int,
+        managed: bool = False,
     ):
         _check_region(name, rsize, offset, length)
         self.name: str = name
         self.rsize: int = rsize
         self.offset: int = offset
         self.length: int = length
+        self.managed: bool = managed
         # NB: Pinning the region keeps the mapping open, and gives us its address.
         self._pin = (ctypes.c_char * length).from_buffer(mapping, offset)
+        # For a managed region: gives up this view's reference to it, once.
+        self._release: Callable[[], Any] | None = None
+        # Whether this region holds a copy made while encoding a message.
+        self._copy = False
 
     @property
     def size(self) -> int:
@@ -223,8 +232,15 @@ class SharedMemoryView:
 
     def dispose(self) -> None:
         """
-        Do nothing: the mapping stays open until this view is garbage collected.
+        For a managed region, give up this view's reference to it now, rather
+        than once the view is garbage collected. Otherwise, do nothing: the
+        mapping stays open until this view is garbage collected.
+
+        After disposing a view, do not use it, nor any array built on it.
         """
+        release, self._release = self._release, None
+        if release is not None:
+            release()
 
     def __str__(self):
         return (
@@ -251,6 +267,7 @@ class NDArray:
         dtype: str,
         shape: list[int],
         shm: SharedMemory | SharedMemoryView | None = None,
+        managed: bool = False,
     ):
         """
         Create an NDArray.
@@ -266,13 +283,25 @@ class NDArray:
             shape: The dimensional extents; e.g. a stack of 7 image planes
                 with resolution 512x512 would have shape [7, 512, 512].
             shm: The SharedMemory containing the array data, or None to create it.
+            managed: When creating the shared memory, whether to allocate it
+                from the service's managed memory, rather than creating a block
+                that the application manages itself. A managed array may be
+                sent to any number of processes, which share its data in place;
+                it is freed once no process uses it anymore. In a worker, the
+                service allocates it, on request.
         """
         self.dtype: str = _normalize_dtype(dtype)
         self.shape: list[int] = shape
         nbytes = prod(shape) * _bytes_per_element(self.dtype)
         self.shm: SharedMemory | SharedMemoryView
         if shm is not None:
+            if managed:
+                raise ValueError("Only new shared memory can be allocated as managed")
             self.shm = shm
+        elif managed:
+            from . import memory
+
+            self.shm = memory.allocate(nbytes)
         else:
             self.shm = SharedMemory(create=True, rsize=nbytes)
 
@@ -324,7 +353,7 @@ class NDArray:
         return self.__array__()
 
     @classmethod
-    def copy_of(cls, arr) -> NDArray:
+    def copy_of(cls, arr, managed: bool = False) -> NDArray:
         """
         Create an NDArray in new shared memory, holding a copy of the given
         NumPy array.
@@ -335,8 +364,10 @@ class NDArray:
 
         Args:
             arr: The NumPy array to copy.
+            managed: Whether to allocate the copy from the service's managed
+                memory; see the NDArray constructor.
         """
-        nda = cls(arr.dtype.name, list(arr.shape))
+        nda = cls(arr.dtype.name, list(arr.shape), managed=managed)
         try:
             nda.__array__()[...] = arr
         except BaseException:
@@ -373,6 +404,29 @@ message.register_encoder(
 )
 
 
+def _managed_view_of(arr) -> SharedMemoryView | None:
+    """
+    Return the view of the managed region the given NumPy array spans
+    exactly, if any, so that the array can be sent by reference.
+    """
+    base = arr
+    while getattr(base, "base", None) is not None and not isinstance(
+        base, SharedMemoryView
+    ):
+        base = base.base
+    if not isinstance(base, SharedMemoryView) or not base.managed:
+        return None
+    if (
+        not arr.flags.c_contiguous
+        or not arr.dtype.isnative
+        or arr.nbytes != base.length
+    ):
+        return None
+    if arr.__array_interface__["data"][0] != ctypes.addressof(base._pin):
+        return None
+    return base
+
+
 # Names of the shared memory blocks created by this process, not yet unlinked.
 _created: set[str] = set()
 
@@ -391,7 +445,9 @@ def _check_region(name: str, rsize: int, offset: int, length: int) -> None:
         )
 
 
-def _attach_view(name: str, rsize: int, offset: int, length: int) -> SharedMemoryView:
+def _attach_view(
+    name: str, rsize: int, offset: int, length: int, managed: bool = False
+) -> SharedMemoryView:
     """
     Attach to a region of the named shared memory block. All regions of a
     block attached by this process share one mapping of it.
@@ -405,12 +461,13 @@ def _attach_view(name: str, rsize: int, offset: int, length: int) -> SharedMemor
                 resource_tracker.unregister(block._name, "shared_memory")
             mapping = block._detach()
             _mappings[name] = mapping
-    return SharedMemoryView(mapping, name, rsize, offset, length)
+    return SharedMemoryView(mapping, name, rsize, offset, length, managed)
 
 
 def _decode_shm(m: dict[str, Any]):
     """
-    Decode a shared memory reference: a whole block, or a region of one.
+    Decode an unmanaged shared memory reference: a whole block, or a region
+    of one. (Managed references are decoded by the memory backend's link.)
     """
     if not any(key in m for key in ("offset", "length")):
         # A plain block reference, as always.
@@ -424,10 +481,21 @@ def _decode_shm(m: dict[str, Any]):
 
 def _decode_ndarray(m: dict[str, Any]):
     """
-    Decode an array, which can be viewed as a NumPy array via
-    numpy.asarray(nda).
+    Decode an array. A managed array becomes a NumPy array, if NumPy is
+    available; any other array becomes an NDArray, which can be viewed as a
+    NumPy array via numpy.asarray(nda).
     """
-    return NDArray(m["dtype"], m["shape"], m["shm"])
+    shm = m["shm"]
+    if isinstance(shm, SharedMemoryView) and shm.managed:
+        try:
+            import numpy
+        except ModuleNotFoundError:
+            pass
+        else:
+            dtype = _normalize_dtype(m["dtype"])
+            nbytes = prod(m["shape"]) * _bytes_per_element(dtype)
+            return numpy.asarray(shm)[:nbytes].view(dtype).reshape(m["shape"])
+    return NDArray(m["dtype"], m["shape"], shm)
 
 
 def _unlink_untracked(name: str) -> None:

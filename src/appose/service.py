@@ -23,6 +23,7 @@ from traceback import format_exc
 from typing import TYPE_CHECKING, Any, Callable, overload
 from uuid import uuid4
 
+from . import memory
 from ._version import __version__
 from .syntax import ScriptSyntax
 from .syntax import get as syntax_from_name
@@ -93,6 +94,8 @@ class Service:
         self._exports: dict[str, Any] = {}
         self._export_count: int = 0
         self._exports_lock: threading.Lock = threading.Lock()
+        # Managed shared memory, as used over the connection to the worker.
+        self._memory_link: memory.MemoryLink = memory.backend().link(_ServicePeer(self))
         self._stdin_lock: threading.Lock = threading.Lock()
         self._closing: bool = False
 
@@ -289,6 +292,10 @@ class Service:
             self._init_script, "appose-init-", "APPOSE_INIT_SCRIPT"
         )
 
+        # Tell the worker which memory backend provides managed shared memory,
+        # so that it may use the matching worker side.
+        self._env_vars[memory.ENV_VAR] = memory.backend_name()
+
         self._process = process.builder(self._cwd, self._env_vars, *self._args)
         _track(self)
 
@@ -315,6 +322,14 @@ class Service:
     ) -> Task:
         """
         Create a new task, passing the given script to the worker for execution.
+
+        NumPy arrays among the inputs (and among the task's outputs, when the
+        worker is a Python worker) travel through the service's managed shared
+        memory, and arrive as NumPy arrays. A plain NumPy array is copied into
+        managed memory once; an array already spanning a managed region (e.g.
+        one received earlier, or numpy.asarray of an NDArray created with
+        managed=True) is sent by reference, so that both processes share it
+        in place. The service frees each region once no process uses it.
 
         Args:
             script: The script for the worker to execute in its environment.
@@ -475,8 +490,9 @@ class Service:
         The worker finishes any pending tasks, and then exits.
 
         The input stream closes only once the tasks already started have
-        finished: until then, they can still call into service objects. No
-        new task can start meanwhile.
+        finished: until then, they can still call into service objects, and
+        allocate managed shared memory (e.g. for their NumPy outputs). No new
+        task can start meanwhile.
 
         Without a timeout, this method only begins the shutdown, returning
         immediately. With a timeout, it waits up to that many seconds for
@@ -641,7 +657,7 @@ class Service:
         Process a line of output from the worker's stdout stream.
         """
         try:
-            response = decode(line)
+            response = decode(line, self._memory_link)
         except Exception:
             self._reject(line, format_exc())
             raise
@@ -658,6 +674,10 @@ class Service:
                 f"this service requires Appose {_minor(__version__)}.x."
             )
         if self._incompatibility is not None:
+            return
+        if response.get("responseType") == ResponseType.RELEASE.value:
+            # The worker gives up references to managed regions.
+            self._memory_link.released(response.get("regions") or [])
             return
         if response.get("responseType") == ResponseType.CALL.value:
             # The worker is calling back into a service object.
@@ -740,6 +760,11 @@ class Service:
     def _monitor_loop(self) -> None:
         # Wait until the worker process terminates.
         self._process.wait()
+
+        # Once the worker's output is fully processed (its last outputs may
+        # refer to managed regions it holds), drop its remaining references.
+        self._stdout_thread.join()
+        self._memory_link.close()
 
         # Do some sanity checks.
         exit_code = self._process.returncode
@@ -827,7 +852,11 @@ class Service:
         """
         Send a request to the worker process.
         """
-        encoded = encode(request, self._export)
+        managed: list = []
+        encoded = encode(request, self._export, self._memory_link, managed)
+        # NB: Tell the link before sending, while the views are still held,
+        # so that no region is freed in between.
+        self._memory_link.sent(managed)
         # NB: Requests may be sent from multiple threads, and must not interleave.
         with self._stdin_lock:
             # NB: Flush is necessary to ensure worker receives the data!
@@ -907,6 +936,20 @@ class Service:
 
     def __exit__(self, exc_type, exc_value, exc_tb) -> None:
         self.close()
+
+
+class _ServicePeer(memory.Peer):
+    """The worker, as the service's memory backend may use it."""
+
+    def __init__(self, service: Service) -> None:
+        self._service = service
+
+    def send(self, message: Args) -> None:
+        self._service._send(message)
+
+    def export(self, name: str, obj: Any) -> None:
+        with self._service._exports_lock:
+            self._service._exports[name] = obj
 
 
 _started_services: weakref.WeakSet[Service] = weakref.WeakSet()
@@ -999,6 +1042,7 @@ class ResponseType(Enum):
     LAUNCH = "LAUNCH"
     UPDATE = "UPDATE"
     CALL = "CALL"
+    RELEASE = "RELEASE"
     COMPLETION = "COMPLETION"
     CANCELATION = "CANCELATION"
     FAILURE = "FAILURE"

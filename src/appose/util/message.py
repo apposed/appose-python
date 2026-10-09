@@ -66,7 +66,12 @@ _proxy_counter = 0
 _worker_instance = None
 
 
-def encode(data: Args, exporter: Callable[[Any], Args] | None = None) -> str:
+def encode(
+    data: Args,
+    exporter: Callable[[Any], Args] | None = None,
+    link: Any = None,
+    managed: list | None = None,
+) -> str:
     """
     Encode the given data as a single line of JSON.
 
@@ -75,22 +80,69 @@ def encode(data: Args, exporter: Callable[[Any], Args] | None = None) -> str:
         exporter: Optional function to call for objects that are not
             JSON-serializable. It must return a JSON-serializable
             reference to the object (e.g. a service_object dict).
+        link: The memory link (see appose.memory) of the connection the
+            message is for, which describes the references to managed shared
+            memory regions it contains. If None, the message cannot refer to
+            managed memory, and NumPy arrays are not copied into it.
+        managed: Optional list in which to collect the views of managed
+            shared memory regions the message refers to. The caller must keep
+            them until the message is written, and tell the link they are
+            sent (see MemoryLink.sent).
     """
-    return json.dumps(
-        data, cls=_ApposeJSONEncoder, separators=(",", ":"), exporter=exporter
-    )
+    try:
+        return json.dumps(
+            data,
+            cls=_ApposeJSONEncoder,
+            separators=(",", ":"),
+            exporter=exporter,
+            link=link,
+            managed=managed,
+        )
+    except BaseException:
+        # Free the copies made for this message.
+        for view in managed or []:
+            if getattr(view, "_copy", False):
+                view.dispose()
+        raise
 
 
-def decode(the_json: str) -> Args:
-    return json.loads(the_json, object_hook=_appose_object_hook)
+def decode(the_json: str, link: Any = None) -> Args:
+    """
+    Decode the given line of JSON.
+
+    Args:
+        the_json: The JSON to decode.
+        link: The memory link (see appose.memory) of the connection the
+            message came from, which resolves the references to managed
+            shared memory regions it contains. If None, the message cannot
+            refer to managed memory.
+    """
+    return json.loads(the_json, object_hook=lambda obj: _appose_object_hook(obj, link))
 
 
 class _ApposeJSONEncoder(json.JSONEncoder):
-    def __init__(self, *args, exporter=None, **kwargs):
+    def __init__(self, *args, exporter=None, link=None, managed=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._exporter = exporter
+        self._link = link
+        self._managed = managed
 
     def default(self, obj):
+        from ..shm import SharedMemoryView
+
+        # NB: Check the type, rather than the managed attribute itself,
+        # which a proxy (e.g. ServiceProxy) would try to fetch remotely.
+        if isinstance(obj, SharedMemoryView) and obj.managed:
+            if self._link is None:
+                raise ValueError(
+                    f"Cannot send {obj}: no managed memory on this connection"
+                )
+            if obj._release is None:
+                raise ValueError(f"{obj} was already disposed of")
+            if self._managed is not None:
+                self._managed.append(obj)
+            return {"appose_type": "shm", **self._link.describe(obj), "managed": True}
+
         for obj_type, (appose_type, encoder) in _encoders.items():
             if isinstance(obj, obj_type):
                 return {"appose_type": appose_type, **encoder(obj)}
@@ -131,8 +183,22 @@ class _ApposeJSONEncoder(json.JSONEncoder):
         # sys.modules rather than importing numpy, which need not be
         # installed, and is slow to import when it is.
         numpy = sys.modules.get("numpy")
-        if numpy is not None and isinstance(obj, numpy.bool_):
-            return bool(obj)
+        if numpy is not None:
+            if numpy is not None and isinstance(obj, numpy.bool_):
+                return bool(obj)
+            if isinstance(obj, numpy.generic):
+                return obj.item()
+            if isinstance(obj, numpy.ndarray) and self._link is not None:
+                from ..shm import NDArray, _managed_view_of
+
+                # An array spanning a managed region is sent by reference;
+                # any other array is copied into a new managed region.
+                view = _managed_view_of(obj)
+                if view is not None:
+                    return NDArray(obj.dtype.name, list(obj.shape), view)
+                nda = NDArray.copy_of(obj, managed=True)
+                nda.shm._copy = True
+                return nda
 
         # A proxy to a service object travels back as a reference to it,
         # rather than being wrapped in another layer of proxying.
@@ -163,9 +229,15 @@ class _ApposeJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def _appose_object_hook(obj: dict):
+def _appose_object_hook(obj: dict, link: Any = None):
     atype = obj.get("appose_type")
     if atype == "shm":
+        if obj.get("managed"):
+            if link is None:
+                raise ValueError(
+                    "Cannot receive managed memory: none on this connection"
+                )
+            return link.resolve(obj)
         from ..shm import _decode_shm
 
         return _decode_shm(obj)

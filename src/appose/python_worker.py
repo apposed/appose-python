@@ -26,6 +26,7 @@ from typing import Any
 from uuid import uuid4
 
 # NB: Avoid relative imports so that this script can be run standalone.
+from appose import memory
 from appose._version import __version__
 from appose.service import RequestType, ResponseType
 from appose.util import message
@@ -137,6 +138,11 @@ class Task:
             self._report_completion()
         except BaseException:  # noqa: BLE001 -- any script failure must be reported back, not crash the worker
             self.fail(traceback.format_exc())
+        finally:
+            # NB: Drop the inputs and outputs, so that shared memory regions
+            # among them are released as soon as the script no longer uses them.
+            self._inputs = None
+            self.outputs = {}
 
     def _report_launch(self) -> None:
         self._respond(ResponseType.LAUNCH, None)
@@ -187,6 +193,19 @@ class _PendingCall:
         self.event.set()
 
 
+class _WorkerPeer(memory.Peer):
+    """The service, as the worker's memory backend may use it."""
+
+    def __init__(self, worker: Worker) -> None:
+        self._worker = worker
+
+    def send(self, message: Args) -> None:
+        self._worker._send(message)
+
+    def call(self, function: str, *args: Any) -> Any:
+        return self._worker._invoke(function, "call", args=list(args))
+
+
 class Worker:
     def __init__(self):
         self.tasks: dict[str, Task] = {}
@@ -197,6 +216,12 @@ class Worker:
 
         # Flag this process as a worker, not a service.
         message._worker_mode = True
+        # Use managed shared memory only if the service provides it, via a
+        # backend this worker supports; otherwise, NumPy arrays are sent as
+        # proxies.
+        memory.use_from_environment()
+        backend = memory.backend()
+        self._memory_link = None if backend is None else backend.link(_WorkerPeer(self))
         # Store reference to this worker for auto-export functionality.
         message._worker_instance = self
 
@@ -220,11 +245,15 @@ class Worker:
         """
         Send a message to the service.
         """
-        encoded = message.encode(response)
+        # NB: Hold the views of managed regions the message refers to until
+        # it is written, so that no release of them overtakes the message.
+        managed: list = []
+        encoded = message.encode(response, link=self._memory_link, managed=managed)
         # NB: Messages may be sent from multiple threads, and must not interleave.
         with self._stdout_lock:
             # NB: Flush is necessary to ensure service receives the data!
             print(encoded, flush=True)
+        del managed
 
     def _invoke(
         self, var: str, op: str, name: str | None = None, args: list | None = None
@@ -279,6 +308,8 @@ class Worker:
                 line = None
             if not line:
                 self.running = False
+                if self._memory_link is not None:
+                    self._memory_link.close()
                 # Release any threads still awaiting replies from the service.
                 for call_id in list(self.calls):
                     pending = self.calls.pop(call_id, None)
@@ -297,7 +328,7 @@ class Worker:
         the request must be told.
         """
         try:
-            request = message.decode(line)
+            request = message.decode(line, self._memory_link)
         except BaseException:  # noqa: BLE001 -- the receiver must never die; report the failure instead
             self._reject(line, traceback.format_exc())
             return

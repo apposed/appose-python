@@ -192,3 +192,27 @@ def assert_complete(task: Task):
         caller = traceback.extract_stack()[-2].name
         error_message = f"TASK ERROR in method {caller}:\n{task.error}"
     assert task.status == TaskStatus.COMPLETE, error_message
+
+
+def shm_unlinked(name: str) -> bool:
+    """
+    Whether the named shared memory block is gone. Unlike attaching to it,
+    this does not involve (and so does not confuse) the resource tracker.
+    """
+    if os.name != "posix":
+        from appose.shm import SharedMemory
+
+        try:
+            SharedMemory(name=name).close()
+        except FileNotFoundError:
+            return True
+        return False
+
+    import _posixshmem
+
+    try:
+        fd = _posixshmem.shm_open("/" + name, os.O_RDONLY, 0)
+    except FileNotFoundError:
+        return True
+    os.close(fd)
+    return False
