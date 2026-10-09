@@ -486,7 +486,7 @@ class BaseBuilder(Builder):
 
     def delete(self) -> None:
         """Default implementation: delete env_dir if it exists."""
-        dir_path = self._env_dir
+        dir_path = self._resolve_env_dir()
         if dir_path is not None and dir_path.exists():
             shutil.rmtree(dir_path)
 
@@ -494,8 +494,10 @@ class BaseBuilder(Builder):
         """Default implementation: inspect env_dir and its appose.json."""
         try:
             dir_path = self._resolve_env_dir()
-        except (ValueError, TypeError):
-            # No name, directory or (recognizable) content: no target location to speak of.
+        except ValueError:
+            # No scheme or (recognizable) content: no target location to speak of.
+            return EnvStatus.MISSING
+        if dir_path is None:
             return EnvStatus.MISSING
         if self._incompatibility(dir_path) is not None:
             return EnvStatus.INCOMPATIBLE
@@ -641,8 +643,8 @@ class BaseBuilder(Builder):
                 self, f"Cannot use {type(self).__name__}: {reason} at {env_dir}"
             )
 
-    def _resolve_env_dir(self) -> Path:
-        """Determine the environment directory path."""
+    def _resolve_env_dir(self) -> Path | None:
+        """Determine the environment directory path, or None if it has no name."""
         if self._env_dir:
             return self._env_dir
 
@@ -655,7 +657,7 @@ class BaseBuilder(Builder):
             else (self._resolve_scheme().env_name(self._content))
         )
 
-        return Path(appose_envs_dir()) / dir_name
+        return None if dir_name is None else Path(appose_envs_dir()) / dir_name
 
     def _resolve_scheme(self) -> Scheme:
         """Determine the scheme, detecting from content if needed."""
@@ -820,6 +822,15 @@ class SimpleBuilder(BaseBuilder):
         # No package management, hence no build state to compare against.
         base = self._resolve_env_dir()
         return EnvStatus.EXTERNAL if base.is_dir() else EnvStatus.MISSING
+
+    def delete(self) -> None:
+        """SimpleBuilder does not support delete."""
+        # Note: The base directory is not Appose-managed; it defaults to the
+        # current working directory, which must never be deleted.
+        raise NotImplementedError(
+            "SimpleBuilder does not support delete(). "
+            "Custom environments are not managed by Appose."
+        )
 
     def rebuild(self) -> Environment:
         """SimpleBuilder does not support rebuild."""

@@ -113,3 +113,33 @@ def test_simple(tmp_path):
     assert appose.custom().base(env_dir).status() == EnvStatus.MISSING
     env_dir.mkdir()
     assert appose.custom().base(env_dir).status() == EnvStatus.EXTERNAL
+
+
+def test_delete_named(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPOSE_ENVS_DIR", str(tmp_path))
+    touch(tmp_path, "named/conda-meta/history")
+    builder = appose.mamba().name("named")
+    assert builder.status() == EnvStatus.EXTERNAL
+    builder.delete()
+    assert not (tmp_path / "named").exists()
+    assert builder.status() == EnvStatus.MISSING
+
+
+def test_delete_unnamed_content(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPOSE_ENVS_DIR", str(tmp_path))
+    # No name anywhere: nothing to delete, and nothing to report.
+    builder = appose.mamba().content("dependencies:\n  - python\n")
+    builder.delete()
+    assert builder.status() == EnvStatus.MISSING
+
+
+def test_simple_delete_refuses(tmp_path, monkeypatch):
+    # Note: SimpleBuilder's base defaults to the CWD, which must survive.
+    monkeypatch.chdir(tmp_path)
+    marker = tmp_path / "keep-me"
+    marker.touch()
+    with pytest.raises(NotImplementedError):
+        appose.custom().delete()
+    with pytest.raises(NotImplementedError):
+        appose.system().delete()
+    assert marker.exists()
