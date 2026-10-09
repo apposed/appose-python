@@ -60,3 +60,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "-s -p no:faulthandler"
+markers = [
+    "version_check: enforce the worker version check in a builder test",
+]

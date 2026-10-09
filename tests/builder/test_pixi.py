@@ -99,21 +99,18 @@ def test_pixi_vacuous_keeps_existing_env():
     assert marker.exists()
 
 
+@pytest.mark.version_check
 def test_pixi_appose_requirement():
-    """Tests that building without appose dependency fails."""
-    base = "target/envs/pixi-appose-requirement"
-    if Path(base).exists():
+    """Tests that building without appose adds a compatible appose."""
+    base = Path("target/envs/pixi-appose-requirement")
+    if base.exists():
         shutil.rmtree(base)
 
-    with pytest.raises(BuildException):
-        (
-            appose.pixi()
-            .conda("python")
-            .pypi("cowsay==6.1")
-            .base(base)
-            .log_debug()
-            .build()
-        )
+    env = (
+        appose.pixi().conda("python").pypi("cowsay==6.1").base(base).log_debug().build()
+    )
+    assert "appose" in (base / "pixi.toml").read_text()
+    cowsay_and_assert(env, "auto")
 
 
 def test_pixi_pyproject():

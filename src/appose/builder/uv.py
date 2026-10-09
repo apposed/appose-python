@@ -16,6 +16,7 @@ from ..scheme import from_name as scheme_from_name
 from ..tool.uv import Uv
 from ..util.platform import is_windows
 from . import BaseBuilder, Builder, BuilderFactory, BuildException, EnvStatus
+from .requirement import appose_requirement, mentions_appose
 
 
 class UvBuilder(BaseBuilder):
@@ -63,6 +64,19 @@ class UvBuilder(BaseBuilder):
         super()._add_state_fields(state)
         state["pythonVersion"] = self._python_version
         state["packages"] = list(self._packages)
+        if self._adds_appose():
+            # NB: Recorded, so that a change in Appose version triggers a rebuild.
+            state["appose"] = appose_requirement().pip_args()
+
+    def _adds_appose(self) -> bool:
+        """Whether this builder adds appose to the packages it installs."""
+        # NB: With no packages to install, there is nothing to build, and an
+        # existing environment (e.g. one being wrapped) is used as-is.
+        return (
+            self._content is None
+            and bool(self._packages)
+            and not mentions_appose(self._packages)
+        )
 
     def _has_environment(self, env_dir: Path) -> bool:
         return (env_dir / "pyvenv.cfg").is_file() or (env_dir / ".venv").is_dir()
@@ -168,12 +182,12 @@ class UvBuilder(BaseBuilder):
                     # Create virtual environment
                     uv.create_venv(env_dir, self._python_version)
 
-                # Install packages
+                # Install packages, including a compatible appose for the worker,
+                # unless the caller chose one explicitly.
                 if self._packages:
                     all_packages = list(self._packages)
-                    # Always include appose if we're installing packages
-                    if "appose" not in all_packages:
-                        all_packages.append("appose")
+                    if self._adds_appose():
+                        all_packages.extend(appose_requirement().pip_args())
                     uv.pip_install(env_dir, *all_packages)
 
             self._write_appose_state_file(env_dir)

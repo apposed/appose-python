@@ -9,10 +9,15 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def skip_version_check(monkeypatch):
+def skip_version_check(request, monkeypatch):
     """
-    Skip the worker version check: these tests build environments containing a
-    released appose, from conda-forge or PyPI, which need not match the version
-    of appose under test. They test environment building, not compatibility.
+    Skip the worker version check: most of these tests build environments from
+    user-style files containing a released appose, from conda-forge or PyPI,
+    which need not match the version of appose under test. They test
+    environment building, not compatibility.
+
+    Tests marked version_check, whose builders add a compatible appose
+    themselves, enforce the check as usual.
     """
-    monkeypatch.setenv("APPOSE_SKIP_VERSION_CHECK", "1")
+    if request.node.get_closest_marker("version_check") is None:
+        monkeypatch.setenv("APPOSE_SKIP_VERSION_CHECK", "1")

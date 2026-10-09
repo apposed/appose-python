@@ -17,6 +17,7 @@ from ..scheme import from_name as scheme_from_name
 from ..tool.pixi import Pixi
 from . import BaseBuilder, Builder, BuilderFactory, BuildException, EnvStatus
 from .pixi_install_monitor import PixiInstallMonitor
+from .requirement import appose_requirement, mentions_appose
 
 
 class PixiBuilder(BaseBuilder):
@@ -64,6 +65,15 @@ class PixiBuilder(BaseBuilder):
         super()._add_state_fields(state)
         state["condaPackages"] = list(self._conda_packages)
         state["pypiPackages"] = list(self._pypi_packages)
+        if self._adds_appose():
+            # NB: Recorded, so that a change in Appose version triggers a rebuild.
+            state["appose"] = appose_requirement().pip_args()
+
+    def _adds_appose(self) -> bool:
+        """Whether this builder adds appose to the packages it installs."""
+        return self._content is None and not mentions_appose(
+            self._conda_packages + self._pypi_packages
+        )
 
     def _has_environment(self, env_dir: Path) -> bool:
         return (env_dir / ".pixi" / "envs" / "default").is_dir()
@@ -199,17 +209,12 @@ class PixiBuilder(BaseBuilder):
                 if self._pypi_packages:
                     pixi.add_pypi_packages(env_dir, *self._pypi_packages)
 
-                # Verify that appose was included when building programmatically
-                import re
-
-                has_appose = any(
-                    re.match(r"^appose\b", pkg) for pkg in self._conda_packages
-                ) or any(re.match(r"^appose\b", pkg) for pkg in self._pypi_packages)
-                if not has_appose:
-                    raise BuildException(
-                        self,
-                        "Appose package must be explicitly included when building programmatically. "
-                        'Add .conda("appose") or .pypi("appose") to your builder.',
+                # Add a compatible appose for the worker,
+                # unless the caller chose one explicitly.
+                if self._adds_appose():
+                    requirement = appose_requirement()
+                    pixi.add_pypi_packages(
+                        env_dir, requirement.spec, editable=requirement.editable
                     )
 
             self._run_pixi_install(pixi, env_dir)

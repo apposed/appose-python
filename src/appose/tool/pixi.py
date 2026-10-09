@@ -245,13 +245,17 @@ class Pixi(Tool):
         ]
         self.exec(*cmd)
 
-    def add_pypi_packages(self, project_dir: Path, *packages: str) -> None:
+    def add_pypi_packages(
+        self, project_dir: Path, *packages: str, editable: bool = False
+    ) -> None:
         """
         Add PyPI packages to a pixi project.
 
         Args:
             project_dir: The pixi project directory.
             packages: The PyPI packages to add.
+            editable: Whether to install the packages in editable mode,
+                which applies to packages given as local directories.
 
         Raises:
             IOError: If an I/O error occurs.
@@ -263,6 +267,7 @@ class Pixi(Tool):
         cmd = [
             "add",
             "--pypi",
+            *(["--editable"] if editable else []),
             "--manifest-path",
             str((project_dir / "pixi.toml").absolute()),
             *packages,

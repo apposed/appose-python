@@ -6,6 +6,8 @@
 
 from pathlib import Path
 
+import pytest
+
 import appose
 from appose.builder.uv import UvBuilder
 from tests.test_base import cowsay_and_assert
@@ -27,6 +29,7 @@ def test_uv():
     cowsay_and_assert(env, "uv")
 
 
+@pytest.mark.version_check
 def test_uv_builder_api():
     """Tests the programmatic builder API for uv."""
     env = (
