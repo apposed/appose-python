@@ -333,6 +333,35 @@ def redirected_url(url: str) -> str:
         return url
 
 
+def redirect_location(url: str) -> str | None:
+    """
+    Get the target of a URL's redirect, without following it.
+
+    Args:
+        url: URL that may redirect.
+
+    Returns:
+        The redirect target, or None if the URL does not redirect.
+
+    Raises:
+        IOError: If the connection fails.
+    """
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    opener = urllib.request.build_opener(NoRedirect)
+    request = urllib.request.Request(url, headers={"User-Agent": user_agent()})
+    try:
+        with opener.open(request):
+            return None
+    except HTTPError as e:
+        if 300 <= e.code < 400:
+            return e.headers.get("Location")
+        raise
+
+
 def get_file_size(url: str) -> int:
     """
     Get the size of the file stored at the given URL.

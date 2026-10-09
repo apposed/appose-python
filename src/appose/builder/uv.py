@@ -145,6 +145,11 @@ class UvBuilder(BaseBuilder):
             if self.status() == EnvStatus.CURRENT:
                 return self._create_environment(env_dir)
 
+            # We are about to hit the network anyway; take the opportunity
+            # to keep uv current, so it understands state written by newer
+            # uv installations elsewhere on the system.
+            uv.self_update()
+
             # Determine whether the venv already exists.
             is_venv_built = (env_dir / "pyvenv.cfg").is_file() or (
                 env_dir / ".venv"

@@ -107,6 +107,11 @@ class MambaBuilder(BaseBuilder):
                     "No source specified for MambaBuilder. Use .file() or .content()",
                 )
 
+            # We are about to hit the network anyway; take the opportunity
+            # to keep micromamba current, so it understands state written by
+            # newer micromamba installations elsewhere on the system.
+            mamba.self_update()
+
             # Wipe existing env directory to avoid conflicts with stale state.
             if env_dir.exists():
                 shutil.rmtree(env_dir)

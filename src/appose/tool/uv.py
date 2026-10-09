@@ -9,6 +9,9 @@ uv is a fast Python package installer and resolver written in Rust.
 
 from __future__ import annotations
 
+import os
+import re
+import tempfile
 from pathlib import Path
 
 from ..util import download, environment, platform
@@ -54,6 +57,15 @@ class Uv(Tool):
     # uv version to download
     UV_VERSION = "0.9.5"
 
+    # Minimum acceptable uv version; older installations get upgraded to it
+    MIN_VERSION: str = UV_VERSION
+
+    # Environment variable which, when set to false, disables checking for newer releases
+    AUTO_UPDATE_VAR: str = "APPOSE_UV_AUTO_UPDATE"
+
+    # URL which redirects to the latest uv release
+    LATEST_URL: str = "https://github.com/astral-sh/uv/releases/latest"
+
     # Path where Appose installs uv by default (.uv subdirectory thereof)
     BASE_PATH: str = environment.appose_envs_dir()
 
@@ -96,59 +108,49 @@ class Uv(Tool):
         Raises:
             IOError: If decompression/installation fails.
         """
-        uv_base_dir = Path(self.rootdir)
-        if not uv_base_dir.is_dir():
-            uv_base_dir.mkdir(parents=True, exist_ok=True)
+        uv_bin_dir = Path(self.command).parent
+        uv_bin_dir.mkdir(parents=True, exist_ok=True)
 
-        uv_bin_dir = uv_base_dir / ".uv" / "bin"
-        if not uv_bin_dir.exists():
-            uv_bin_dir.mkdir(parents=True, exist_ok=True)
+        # Note: Unpack to a staging directory and move the binaries into place,
+        # rather than overwriting existing binaries in place, which can break
+        # them while in use (and invalidates cached code signatures on macOS).
+        with tempfile.TemporaryDirectory(dir=uv_bin_dir.parent) as staging:
+            staging_dir = Path(staging)
+            download.unpack(archive, staging_dir)
 
-        # Extract archive
-        download.unpack(archive, uv_bin_dir)
-
-        uv_binary_name = "uv.exe" if platform.is_windows() else "uv"
-        uv_dest = Path(self.command)
-
-        # Check if uv binary is directly in bin dir (Windows ZIP case)
-        uv_directly = uv_bin_dir / uv_binary_name
-        if uv_directly.exists():
-            # Windows case: binaries are directly in uvBinDir
-            # Just ensure uv.exe is in the right place (uvCommand)
-            if uv_directly != uv_dest:
-                uv_directly.rename(uv_dest)
-            # uvw.exe and uvx.exe are already in the right place (uvBinDir)
-        else:
-            # Linux/macOS case: binaries are in uv-<platform>/ subdirectory
+            # Windows ZIPs contain the binaries directly;
+            # others contain them in a uv-<platform> subdirectory.
             platform_dirs = [
                 f
-                for f in uv_bin_dir.iterdir()
+                for f in staging_dir.iterdir()
                 if f.is_dir() and f.name.startswith("uv-")
             ]
-            if not platform_dirs:
-                raise OSError(
-                    f"Expected uv binary or uv-<platform> directory not found in: {uv_bin_dir}"
-                )
+            source_dir = platform_dirs[0] if platform_dirs else staging_dir
 
-            platform_dir = platform_dirs[0]
-
-            # Move all binaries from platform subdirectory to bin directory
-            for binary in platform_dir.iterdir():
+            for binary in source_dir.iterdir():
+                if not binary.is_file():
+                    continue
                 dest = uv_bin_dir / binary.name
-                binary.rename(dest)
-                # Set executable permission
+                os.replace(binary, dest)
                 if not platform.is_executable(dest):
                     dest.chmod(dest.stat().st_mode | 0o111)
 
-            # Clean up the now-empty platform directory
-            platform_dir.rmdir()
-
-        if not uv_dest.exists():
+        if not Path(self.command).exists():
             raise OSError(f"Expected uv binary is missing: {self.command}")
 
-        # Set executable permission if needed
-        if not platform.is_executable(uv_dest):
-            uv_dest.chmod(uv_dest.stat().st_mode | 0o111)
+    def _latest_version(self) -> str | None:
+        location = download.redirect_location(self.LATEST_URL)
+        match = re.search(r"/tag/([^/]+)$", location or "")
+        if not match:
+            raise OSError(
+                f"Could not determine latest uv release from {self.LATEST_URL}"
+            )
+        return match.group(1)
+
+    def _download_url(self, version: str) -> str | None:
+        if not self.UV_BINARY:
+            return None
+        return f"https://github.com/astral-sh/uv/releases/download/{version}/{self.UV_BINARY}"
 
     def create_venv(self, env_dir: Path, python_version: str | None = None) -> None:
         """

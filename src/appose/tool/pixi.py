@@ -10,9 +10,6 @@ management than micromamba and supports both conda and PyPI packages.
 
 from __future__ import annotations
 
-import os
-import re
-import time
 from pathlib import Path
 
 from ..util import download, environment, platform
@@ -35,11 +32,6 @@ def _pixi_binary() -> str | None:
     return mapping.get(platform_str)
 
 
-def _version_tuple(version: str) -> tuple[int, ...]:
-    """Parses a version string like "v0.81.0" into a comparable tuple of ints."""
-    return tuple(int(n) for n in re.findall(r"\d+", version)[:3])
-
-
 class Pixi(Tool):
     """
     Pixi-based environment manager.
@@ -57,9 +49,6 @@ class Pixi(Tool):
 
     # Minimum acceptable Pixi version; older installations get upgraded to it
     MIN_VERSION: str = PIXI_VERSION
-
-    # Minimum number of seconds between checks for a newer Pixi release
-    UPDATE_INTERVAL: float = 24 * 60 * 60
 
     # Environment variable which, when set to false, disables checking for newer releases
     AUTO_UPDATE_VAR: str = "APPOSE_PIXI_AUTO_UPDATE"
@@ -124,69 +113,11 @@ class Pixi(Tool):
         if not platform.is_executable(pixi_file):
             pixi_file.chmod(pixi_file.stat().st_mode | 0o111)
 
-    def update(self) -> None:
-        """
-        Upgrade the installed Pixi, if warranted.
-
-        Pixi is upgraded to the latest release, at most once per UPDATE_INTERVAL,
-        unless the APPOSE_PIXI_AUTO_UPDATE environment variable is set to false.
-        Regardless, Pixi is upgraded to at least MIN_VERSION, so that it
-        understands manifests, lock files and caches written by newer Pixi
-        installations elsewhere on the system.
-
-        Failures (e.g. due to no network connection) are reported to the error
-        consumer, but not raised, so that builds can proceed with the existing Pixi.
-
-        Raises:
-            IOError: If Pixi is not installed.
-        """
-        if self._auto_update_enabled() and self._update_check_due():
-            self._self_update()
-
-        if _version_tuple(self.version()) < _version_tuple(self.MIN_VERSION):
-            self._self_update("--version", self.MIN_VERSION.lstrip("v"))
-
-    def _auto_update_enabled(self) -> bool:
-        value = os.environ.get(self.AUTO_UPDATE_VAR, "").strip().lower()
-        return value not in ("0", "false", "no", "off")
-
-    def _update_check_due(self) -> bool:
-        """
-        Check whether UPDATE_INTERVAL has elapsed since the last update check,
-        recording the current time as the latest check if so.
-        """
-        stamp = Path(self.command).parent / "last-update-check"
-        now = time.time()
-        try:
-            elapsed = now - stamp.stat().st_mtime
-            if 0 <= elapsed < self.UPDATE_INTERVAL:
-                return False
-        except OSError:
-            pass  # No previous check recorded.
-        try:
-            # Note: Record the check even if it fails, so that
-            # being offline does not cause a failed check every time.
-            stamp.touch()
-            # Note: Stamp the time we compare against, not the filesystem's
-            # own, which can run ahead of time.time() (e.g. on Windows).
-            os.utime(stamp, (now, now))
-        except OSError:
-            pass
-        return True
-
-    def _self_update(self, *args: str) -> None:
-        try:
-            self._do_exec(
-                cwd=None,
-                silent=False,
-                include_flags=False,
-                args=("self-update", "--no-release-note", *args),
-            )
-        except OSError:
-            # Note: Pixi's own error output has already gone to the error consumer.
-            self._error(
-                "Warning: could not update pixi; continuing with the installed version.\n"
-            )
+    def _upgrade(self, version: str | None) -> None:
+        args = ["self-update", "--no-release-note"]
+        if version is not None:
+            args.extend(["--version", version.lstrip("v")])
+        self._do_exec(cwd=None, silent=False, include_flags=False, args=tuple(args))
 
     def init(self, project_dir: Path) -> None:
         """

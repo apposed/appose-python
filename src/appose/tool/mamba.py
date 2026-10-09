@@ -36,6 +36,9 @@ Conda-based environment manager, implemented by delegating to micromamba.
 
 from __future__ import annotations
 
+import os
+import re
+import tempfile
 from pathlib import Path
 
 from ..util import download, environment, platform
@@ -84,6 +87,9 @@ class Mamba(Tool):
         f"https://micro.mamba.pm/api/micromamba/{PLATFORM}/latest" if PLATFORM else None
     )
 
+    # Environment variable which, when set to false, disables checking for newer releases
+    AUTO_UPDATE_VAR: str = "APPOSE_MAMBA_AUTO_UPDATE"
+
     def __init__(self, rootdir: str | None = None):
         """
         Create a new Mamba object.
@@ -113,22 +119,47 @@ class Mamba(Tool):
         Raises:
             IOError: If decompression/installation fails.
         """
-        # Create mamba base directory
         mamba_base_dir = Path(self.rootdir)
-        if not mamba_base_dir.is_dir():
-            mamba_base_dir.mkdir(parents=True, exist_ok=True)
-
-        # Extract archive
-        download.unpack(archive, mamba_base_dir)
-
-        # Verify micromamba binary exists
+        mamba_base_dir.mkdir(parents=True, exist_ok=True)
         mm_file = Path(self.command)
-        if not mm_file.exists():
-            raise OSError(f"Expected micromamba binary is missing: {self.command}")
+
+        # Note: Unpack to a staging directory and move the binary into place,
+        # rather than overwriting an existing binary in place, which can break
+        # it while in use (and invalidates its cached code signature on macOS).
+        with tempfile.TemporaryDirectory(dir=mamba_base_dir) as staging:
+            staging_dir = Path(staging)
+            download.unpack(archive, staging_dir)
+
+            staged_file = staging_dir / mm_file.relative_to(mamba_base_dir)
+            if not staged_file.exists():
+                raise OSError(
+                    f"Expected micromamba binary is missing from archive: {archive}"
+                )
+            mm_file.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged_file, mm_file)
 
         # Set executable permission if needed
         if not platform.is_executable(mm_file):
             mm_file.chmod(mm_file.stat().st_mode | 0o111)
+
+    def _latest_version(self) -> str | None:
+        # Note: We cannot use "micromamba self-update", because it also
+        # rewrites the user's shell configuration (e.g. ~/.zshrc) when
+        # they have run "micromamba shell init" or "mamba shell init".
+        if self.DOWNLOAD_URL is None:
+            return None
+        location = download.redirect_location(self.DOWNLOAD_URL)
+        match = re.search(r"/micromamba/([^/]+)/", location or "")
+        if not match:
+            raise OSError(
+                f"Could not determine latest micromamba release from {self.DOWNLOAD_URL}"
+            )
+        return match.group(1)
+
+    def _download_url(self, version: str) -> str | None:
+        if self.PLATFORM is None:
+            return None
+        return f"https://micro.mamba.pm/api/micromamba/{self.PLATFORM}/{version}"
 
     def create(self, env_dir: Path) -> None:
         """

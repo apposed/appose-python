@@ -10,11 +10,24 @@ and progress tracking.
 
 from __future__ import annotations
 
+import os
+import re
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Callable
 
 from ..util import download, platform, process
+
+# Environment variable which, when set to false, disables checking for newer
+# releases of all tools; tool-specific variables (e.g. APPOSE_PIXI_AUTO_UPDATE)
+# take precedence over it
+TOOL_AUTO_UPDATE_VAR = "APPOSE_TOOL_AUTO_UPDATE"
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    """Parses a version string like "v0.81.0" into a comparable tuple of ints."""
+    return tuple(int(n) for n in re.findall(r"\d+", version)[:3])
 
 
 class Tool(ABC):
@@ -22,6 +35,16 @@ class Tool(ABC):
     Base class for external tool helpers.
     Provides common interface for process execution and installation.
     """
+
+    # Minimum acceptable version; older installations get upgraded to it
+    MIN_VERSION: str | None = None
+
+    # Minimum number of seconds between checks for a newer release
+    UPDATE_INTERVAL: float = 24 * 60 * 60
+
+    # Environment variable which, when set to false, disables checking for
+    # newer releases of this tool; overrides the blanket TOOL_AUTO_UPDATE_VAR
+    AUTO_UPDATE_VAR: str | None = None
 
     def __init__(self, name: str, url: str, command: str, rootdir: str):
         """
@@ -141,6 +164,32 @@ class Tool(ABC):
         archive = self._download()
         self._decompress(archive)
 
+    def self_update(self) -> None:
+        """
+        Upgrade the installed tool, if warranted.
+
+        The tool is upgraded to the latest release, at most once per
+        UPDATE_INTERVAL, unless auto-updating is disabled: the tool's own
+        AUTO_UPDATE_VAR environment variable (e.g. APPOSE_PIXI_AUTO_UPDATE)
+        or else the blanket APPOSE_TOOL_AUTO_UPDATE variable is set to false.
+        Regardless, the tool is upgraded to at least MIN_VERSION, if any, so
+        that it understands state written by newer installations of the tool
+        elsewhere on the system.
+
+        Failures (e.g. due to no network connection) are reported to the error
+        consumer, but not raised, so that builds can proceed with the existing tool.
+
+        Raises:
+            IOError: If the tool is not installed.
+        """
+        if self._auto_update_enabled() and self._update_check_due():
+            self._try_upgrade(None)
+
+        if self.MIN_VERSION is not None and _version_tuple(
+            self.version()
+        ) < _version_tuple(self.MIN_VERSION):
+            self._try_upgrade(self.MIN_VERSION)
+
     def is_installed(self) -> bool:
         """
         Get whether the tool is installed or not.
@@ -213,7 +262,101 @@ class Tool(ABC):
                 f"{self.name} is not available for this platform ({platform.PLATFORM}). "
                 "Please install it manually."
             )
-        return download.download(self.name, self.url, self._update_download_progress)
+        return self._download_from(self.url)
+
+    def _download_from(self, url: str) -> Path:
+        return download.download(self.name, url, self._update_download_progress)
+
+    def _upgrade(self, version: str | None) -> None:
+        """
+        Upgrade the installed tool to the given version.
+
+        This default implementation downloads the requested release from
+        _download_url and installs it over the existing one via _decompress.
+        Subclasses whose tool can upgrade itself may override it.
+
+        Args:
+            version: The version to upgrade to, or None for the latest release.
+
+        Raises:
+            IOError: If the upgrade fails.
+        """
+        if version is None:
+            version = self._latest_version()
+            if version is None or _version_tuple(self.version()) >= _version_tuple(
+                version
+            ):
+                return
+        url = self._download_url(version)
+        if url is None:
+            return
+        self._output(f"Updating {self.name} to {version}\n")
+        archive = self._download_from(url)
+        self._decompress(archive)
+
+    def _latest_version(self) -> str | None:
+        """
+        Get the version of the tool's latest release.
+
+        Returns:
+            The latest version, or None if this tool cannot check for newer releases.
+
+        Raises:
+            IOError: If the check fails.
+        """
+        return None
+
+    def _download_url(self, version: str) -> str | None:
+        """
+        Get the URL from which the given release of the tool can be downloaded.
+
+        Args:
+            version: The release version.
+
+        Returns:
+            The download URL, or None if unavailable.
+        """
+        return None
+
+    def _try_upgrade(self, version: str | None) -> None:
+        try:
+            self._upgrade(version)
+        except OSError:
+            # Note: The tool's own error output has already gone to the error consumer.
+            self._error(
+                f"Warning: could not update {self.name}; continuing with the installed version.\n"
+            )
+
+    def _auto_update_enabled(self) -> bool:
+        for var in (self.AUTO_UPDATE_VAR, TOOL_AUTO_UPDATE_VAR):
+            value = os.environ.get(var, "").strip().lower() if var else ""
+            if value:
+                return value not in ("0", "false", "no", "off")
+        return True
+
+    def _update_check_due(self) -> bool:
+        """
+        Check whether UPDATE_INTERVAL has elapsed since the last update check,
+        recording the current time as the latest check if so.
+        """
+        stamp = Path(self.command).parent / "last-update-check"
+        now = time.time()
+        try:
+            elapsed = now - stamp.stat().st_mtime
+            if 0 <= elapsed < self.UPDATE_INTERVAL:
+                return False
+        except OSError:
+            pass  # No previous check recorded.
+        try:
+            # Note: Record the check even if it fails, so that
+            # being offline does not cause a failed check every time.
+            stamp.touch()
+            # Note: Stamp the time we compare against, not the filesystem's
+            # own, which can run ahead of time.time() (e.g. on Windows).
+            os.utime(stamp, (now, now))
+        except OSError:
+            pass
+        return True
 
     @abstractmethod
     def _decompress(self, archive: Path) -> None:
