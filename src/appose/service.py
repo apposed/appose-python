@@ -9,6 +9,7 @@ The appose.service package contains classes for services and tasks.
 from __future__ import annotations
 
 import atexit
+import json
 import os
 import re
 import subprocess
@@ -606,47 +607,96 @@ class Service:
 
             # noinspection PyBroadException
             try:
-                response = decode(line)
-                self._debug_service(line)  # Echo the line to the debug listener.
-                if response.get("responseType") == ResponseType.HELLO.value:
-                    self._handle_hello(response)
-                    continue
-                if self._worker_info is None and self._incompatibility is None:
-                    # NB: Workers predating the HELLO handshake begin with
-                    # some other message, e.g. LAUNCH for the first task.
-                    self._reject_worker(
-                        "Worker did not identify itself, so it probably "
-                        f"predates Appose {_minor(__version__)}; "
-                        f"this service requires Appose {_minor(__version__)}.x."
-                    )
-                if self._incompatibility is not None:
-                    continue
-                if response.get("responseType") == ResponseType.CALL.value:
-                    # The worker is calling back into a service object.
-                    # Handle it on its own thread, so that this loop stays
-                    # free to process other responses in the meantime.
-                    threading.Thread(
-                        target=self._handle_call,
-                        args=(response,),
-                        name=f"Appose-Service-{self._service_id}-Call",
-                        daemon=True,
-                    ).start()
-                    continue
-                uuid = response.get("task")
-                if uuid is None:
-                    self._debug_service(f"Invalid service message: {line}")
-                    continue
-                task = self._tasks.get(uuid)
-                if task is None:
-                    self._debug_service(f"No such task: {uuid}")
-                    continue
-                # noinspection PyProtectedMember
-                task._handle(response)
+                # NB: Handle each response in its own method, so that no
+                # reference to it lingers here while awaiting the next one.
+                self._handle_response(line)
             except Exception:  # noqa: BLE001 -- reader thread must never die; log and skip the bad line
                 # Something went wrong decoding the line of JSON.
                 # Skip it and keep going, but log it first.
                 self._debug_service(f"<INVALID> {line}")
                 self._invalid_lines.append(line.rstrip("\n\r"))
+
+    def _handle_response(self, line: str) -> None:
+        """
+        Process a line of output from the worker's stdout stream.
+        """
+        try:
+            response = decode(line)
+        except Exception:
+            self._reject(line, format_exc())
+            raise
+        self._debug_service(line)  # Echo the line to the debug listener.
+        if response.get("responseType") == ResponseType.HELLO.value:
+            self._handle_hello(response)
+            return
+        if self._worker_info is None and self._incompatibility is None:
+            # NB: Workers predating the HELLO handshake begin with
+            # some other message, e.g. LAUNCH for the first task.
+            self._reject_worker(
+                "Worker did not identify itself, so it probably "
+                f"predates Appose {_minor(__version__)}; "
+                f"this service requires Appose {_minor(__version__)}.x."
+            )
+        if self._incompatibility is not None:
+            return
+        if response.get("responseType") == ResponseType.CALL.value:
+            # The worker is calling back into a service object.
+            # Handle it on its own thread, so that this loop stays
+            # free to process other responses in the meantime.
+            threading.Thread(
+                target=self._handle_call,
+                args=(response,),
+                name=f"Appose-Service-{self._service_id}-Call",
+                daemon=True,
+            ).start()
+            return
+        uuid = response.get("task")
+        if uuid is None:
+            self._debug_service(f"Invalid service message: {line}")
+            return
+        task = self._tasks.get(uuid)
+        if task is None:
+            self._debug_service(f"No such task: {uuid}")
+            return
+        # noinspection PyProtectedMember
+        task._handle(response)
+
+    def _reject(self, line: str, error: str) -> None:
+        """
+        Report a response from the worker that could not be decoded, to
+        whoever awaits it: fail the task it concludes, or the call it makes.
+        """
+        try:
+            raw = json.loads(line)
+        except ValueError:
+            return
+        if not isinstance(raw, dict):
+            return
+        response_type = raw.get("responseType")
+        if response_type == ResponseType.CALL.value:
+            self._send(
+                {
+                    "requestType": RequestType.REPLY.value,
+                    "call": raw.get("call"),
+                    "error": f"Service could not decode the call:\n{error}",
+                }
+            )
+            return
+        terminal = (
+            ResponseType.COMPLETION.value,
+            ResponseType.CANCELATION.value,
+            ResponseType.FAILURE.value,
+        )
+        task = self._tasks.get(raw.get("task"))
+        if response_type in terminal and task is not None:
+            task._handle(
+                {
+                    "task": task.uuid,
+                    "responseType": ResponseType.FAILURE.value,
+                    "error": f"Service could not decode the task's "
+                    f"{response_type} response:\n{error}",
+                }
+            )
 
     def _stderr_loop(self) -> None:
         """

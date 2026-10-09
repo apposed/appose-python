@@ -16,6 +16,7 @@ https://github.com/apposed/appose/blob/-/README.md#workers
 from __future__ import annotations
 
 import ast
+import json
 import os
 import sys
 import traceback
@@ -285,20 +286,65 @@ class Worker:
                         pending.resolve({"error": "Service connection closed"})
                 return
 
-            uuid = None
-            try:
-                request = message.decode(line)
-                uuid = request.get("task")
-                self._handle_request(request, uuid)
-            except BaseException:  # noqa: BLE001 -- receiver thread must never die; report and keep going
-                error = traceback.format_exc()
-                print(f"Invalid request: {line}\n{error}", file=sys.stderr)
-                # NB: If the request was meant to start a task, the service is
-                # waiting for that task to finish, so we must report it failed.
-                if isinstance(uuid, str) and uuid not in self.tasks:
-                    Task(self, uuid).fail(error)
+            # NB: Handle each request in its own method, so that no reference
+            # to it lingers here while awaiting the next one.
+            self._receive(line)
 
-    def _handle_request(self, request: Args, uuid: str | None) -> None:
+    def _receive(self, line: str) -> None:
+        """
+        Decode and handle a request from the service. Whatever goes wrong,
+        this must not stop the receiver; and whoever awaits the outcome of
+        the request must be told.
+        """
+        try:
+            request = message.decode(line)
+        except BaseException:  # noqa: BLE001 -- the receiver must never die; report the failure instead
+            self._reject(line, traceback.format_exc())
+            return
+        try:
+            self._handle_request(request)
+        except BaseException:  # noqa: BLE001 -- the receiver must never die; report the failure instead
+            error = traceback.format_exc()
+            print(f"Invalid request: {line}\n{error}", file=sys.stderr)
+            # NB: If the request was meant to start a task, the service is
+            # waiting for that task to finish, so we must report it failed.
+            uuid = request.get("task")
+            if isinstance(uuid, str) and uuid not in self.tasks:
+                Task(self, uuid).fail(error)
+
+    def _reject(self, line: str, error: str) -> None:
+        """
+        Report a request from the service that could not be decoded:
+        fail its task, or the call awaiting it, if any.
+        """
+        try:
+            raw = json.loads(line)
+        except ValueError:
+            raw = None
+        request_type = raw.get("requestType") if isinstance(raw, dict) else None
+        if request_type == RequestType.EXECUTE.value and raw.get("task"):
+            self._send(
+                {
+                    "task": raw["task"],
+                    "responseType": ResponseType.FAILURE.value,
+                    "error": f"Worker could not decode the task request:\n{error}",
+                }
+            )
+            return
+        if request_type == RequestType.REPLY.value:
+            pending = self.calls.pop(raw.get("call"), None)
+            if pending is not None:
+                pending.resolve(
+                    {"error": f"Worker could not decode the service's reply:\n{error}"}
+                )
+                return
+        print(
+            f"Invalid request, which could not be decoded: {line}\n{error}",
+            file=sys.stderr,
+        )
+
+    def _handle_request(self, request: Args) -> None:
+        uuid = request.get("task")
         request_type = RequestType(request.get("requestType"))
 
         if request_type == RequestType.EXECUTE:
