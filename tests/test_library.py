@@ -141,7 +141,7 @@ def test_library_path_module(tmp_path):
         with pytest.raises(TaskException) as e:
             service.task("import mylib\nmylib.boom()").wait_for()
         error = e.value.task.error
-        assert error is not None and str(lib.resolve()) in error
+        assert error is not None and lib.resolve().as_posix() in error
         assert "raise ValueError('kaboom')" in error
 
 
