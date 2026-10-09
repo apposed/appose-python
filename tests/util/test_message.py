@@ -2,6 +2,7 @@
 # Copyright (C) 2023 - 2026 Appose developers.
 # SPDX-License-Identifier: BSD-2-Clause
 
+import numbers
 import unittest
 from typing import ClassVar
 
@@ -84,6 +85,33 @@ class MessageTest(unittest.TestCase):
 
         data = {"f": numpy.float32(2.5), "i": numpy.int64(3), "b": numpy.bool_(True)}
         self.assertEqual('{"f":2.5,"i":3,"b":true}', message.encode(data))
+
+    def test_encode_registered_scalars(self):
+        class Scalar:
+            def __init__(self, value):
+                self.value = value
+
+            def __int__(self):
+                return int(self.value)
+
+            def __float__(self):
+                return float(self.value)
+
+        class IntScalar(Scalar):
+            pass
+
+        numbers.Integral.register(IntScalar)
+        numbers.Real.register(Scalar)
+
+        data = {"f": Scalar(2.5), "i": IntScalar(3)}
+        self.assertEqual('{"f":2.5,"i":3}', message.encode(data))
+
+    def test_encode_complex_unsupported(self):
+        import numpy
+
+        # A complex number is not real, so it is not encoded as a number.
+        with self.assertRaises(TypeError):
+            message.encode({"c": numpy.complex64(1 + 2j)})
 
     def test_decode(self):
         with appose.SharedMemory(create=True, rsize=4000) as shm:

@@ -9,6 +9,7 @@ Utility functions for encoding and decoding messages.
 from __future__ import annotations
 
 import json
+import numbers
 import sys
 from typing import Any, Callable
 
@@ -79,11 +80,20 @@ class _ApposeJSONEncoder(json.JSONEncoder):
             if isinstance(obj, obj_type):
                 return {"appose_type": appose_type, **encoder(obj)}
 
-        # NB: Check sys.modules rather than importing numpy, which
-        # need not be installed, and is slow to import when it is.
+        # A scalar from another library (e.g. numpy.float32, as numpy.sum
+        # returns) travels as the plain number it holds, if its type is
+        # registered with the numbers ABCs, as numpy's are.
+        if isinstance(obj, numbers.Integral):
+            return int(obj)
+        if isinstance(obj, numbers.Real):
+            return float(obj)
+
+        # Note: numpy.bool_ is not registered with the numbers ABCs. Check
+        # sys.modules rather than importing numpy, which need not be
+        # installed, and is slow to import when it is.
         numpy = sys.modules.get("numpy")
-        if numpy is not None and isinstance(obj, numpy.generic):
-            return obj.item()
+        if numpy is not None and isinstance(obj, numpy.bool_):
+            return bool(obj)
 
         # A proxy to a service object travels back as a reference to it,
         # rather than being wrapped in another layer of proxying.
