@@ -10,6 +10,7 @@ import pytest
 
 import appose
 from appose.builder import BuildException, SimpleBuilder
+from appose.builder import env_type as builder_env_type
 from appose.builder.mamba import MambaBuilder
 from appose.builder.pixi import PixiBuilder
 from appose.util.filepath import delete_recursively
@@ -84,6 +85,19 @@ def test_wrap_uv():
         assert len(uv_env.launch_args()) == 0, (
             "uv environment should have no special launcher"
         )
+    finally:
+        delete_recursively(uv_dir)
+
+
+def test_wrap_uv_project():
+    """Tests detecting a uv project environment, whose venv is in .venv."""
+    uv_dir = Path("target/test-wrap-uv-project")
+    venv_dir = uv_dir / ".venv"
+    venv_dir.mkdir(parents=True, exist_ok=True)
+    (venv_dir / "pyvenv.cfg").touch()
+
+    try:
+        assert builder_env_type(uv_dir) == "uv"
     finally:
         delete_recursively(uv_dir)
 

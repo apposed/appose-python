@@ -343,8 +343,11 @@ class UvBuilderFactory(BuilderFactory):
         """
         env_path = Path(env_dir)
         # uv creates standard Python venv, so look for pyvenv.cfg,
-        # but exclude conda and pixi environments
-        has_pyvenv_cfg = (env_path / "pyvenv.cfg").is_file()
+        # but exclude conda and pixi environments. For pyproject.toml
+        # projects, uv sync puts the venv in a .venv subdirectory.
+        has_pyvenv_cfg = (env_path / "pyvenv.cfg").is_file() or (
+            env_path / ".venv" / "pyvenv.cfg"
+        ).is_file()
         is_not_pixi = (
             not (env_path / ".pixi").is_dir() and not (env_path / "pixi.toml").is_file()
         )
