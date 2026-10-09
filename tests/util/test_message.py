@@ -4,6 +4,7 @@
 
 import numbers
 import unittest
+from fractions import Fraction
 from typing import ClassVar
 
 import appose
@@ -97,6 +98,9 @@ class MessageTest(unittest.TestCase):
             def __float__(self):
                 return float(self.value)
 
+            def __eq__(self, other):
+                return self.value == other
+
         class IntScalar(Scalar):
             pass
 
@@ -105,6 +109,20 @@ class MessageTest(unittest.TestCase):
 
         data = {"f": Scalar(2.5), "i": IntScalar(3)}
         self.assertEqual('{"f":2.5,"i":3}', message.encode(data))
+
+        # A Real more precise than a float is not encoded as a number.
+        with self.assertRaises(TypeError):
+            message.encode({"x": Scalar(Fraction(1, 3))})
+
+    def test_encode_nan(self):
+        import numpy
+
+        self.assertEqual('{"x":NaN}', message.encode({"x": numpy.float64("nan")}))
+
+    def test_encode_rational_unsupported(self):
+        # A rational is not encoded as a number, even when exact as a float.
+        with self.assertRaises(TypeError):
+            message.encode({"x": Fraction(1, 2)})
 
     def test_encode_complex_unsupported(self):
         import numpy

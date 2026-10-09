@@ -9,6 +9,7 @@ Utility functions for encoding and decoding messages.
 from __future__ import annotations
 
 import json
+import math
 import numbers
 import sys
 from typing import Any, Callable
@@ -82,11 +83,35 @@ class _ApposeJSONEncoder(json.JSONEncoder):
 
         # A scalar from another library (e.g. numpy.float32, as numpy.sum
         # returns) travels as the plain number it holds, if its type is
-        # registered with the numbers ABCs, as numpy's are.
+        # registered with the numbers ABCs (as numpy's are), and only if
+        # doing so loses nothing. Otherwise, it falls through to be proxied.
+        #
+        # - An Integral (numpy.int64, sympy.Integer) becomes an int, which
+        #   JSON holds exactly at any size.
+        # - A Rational that is not Integral (fractions.Fraction,
+        #   sympy.Rational) is never flattened: even when a float holds its
+        #   value exactly, e.g. Fraction(1, 2), the receiver would lose the
+        #   exact type, and with it exact arithmetic.
+        # - Any other Real becomes a float only if the float equals it.
+        #   This passes numpy.float32 and numpy.float64, but not
+        #   higher-precision types such as sympy.Float or (on platforms
+        #   where it is wider than a double) numpy.longdouble. NaN is
+        #   checked separately, since it never equals itself.
+        # - Complex numbers are not Real, so they are always proxied.
+        #
+        # Note: Appose could gain a "rational" wire type, encoding any
+        # Rational losslessly as its numerator and denominator (which the
+        # numbers.Rational ABC guarantees), decoded as fractions.Fraction
+        # here, and as a small Number subclass with BigInteger fields in
+        # Java (avoiding a dependency on commons-math3's BigFraction). It
+        # would need support in every Appose implementation, so it awaits
+        # demand from users who need rationals to travel by value.
         if isinstance(obj, numbers.Integral):
             return int(obj)
-        if isinstance(obj, numbers.Real):
-            return float(obj)
+        if isinstance(obj, numbers.Real) and not isinstance(obj, numbers.Rational):
+            f = float(obj)
+            if f == obj or math.isnan(f):
+                return f
 
         # Note: numpy.bool_ is not registered with the numbers ABCs. Check
         # sys.modules rather than importing numpy, which need not be
