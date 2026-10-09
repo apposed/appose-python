@@ -30,7 +30,6 @@ def _uv_binary() -> str | None:
         "WINDOWS|X64": "uv-x86_64-pc-windows-msvc.zip",  # x64 Windows
         "LINUX|ARM64": "uv-aarch64-unknown-linux-gnu.tar.gz",  # ARM64 Linux
         "LINUX|X32": "uv-i686-unknown-linux-gnu.tar.gz",  # x86 Linux
-        "LINUX|PPC64": "uv-powerpc64-unknown-linux-gnu.tar.gz",  # PPC64 Linux
         "LINUX|PPC64LE": "uv-powerpc64le-unknown-linux-gnu.tar.gz",  # PPC64LE Linux
         "LINUX|RV64GC": "uv-riscv64gc-unknown-linux-gnu.tar.gz",  # RISCV Linux
         "LINUX|S390X": "uv-s390x-unknown-linux-gnu.tar.gz",  # S390x Linux
@@ -55,7 +54,7 @@ class Uv(Tool):
     """
 
     # uv version to download
-    UV_VERSION = "0.9.5"
+    UV_VERSION = "0.12.24"
 
     # Minimum acceptable uv version; older installations get upgraded to it
     MIN_VERSION: str = UV_VERSION
