@@ -94,6 +94,7 @@ class Service:
         self._export_count: int = 0
         self._exports_lock: threading.Lock = threading.Lock()
         self._stdin_lock: threading.Lock = threading.Lock()
+        self._closing: bool = False
 
     def debug(self, debug_callback: Callable[[str], Any]) -> Service:
         """
@@ -473,6 +474,10 @@ class Service:
         Close the worker process's input stream, in order to shut it down.
         The worker finishes any pending tasks, and then exits.
 
+        The input stream closes only once the tasks already started have
+        finished: until then, they can still call into service objects. No
+        new task can start meanwhile.
+
         Without a timeout, this method only begins the shutdown, returning
         immediately. With a timeout, it waits up to that many seconds for
         the worker to exit, then kills it (see kill()) if it has not.
@@ -488,7 +493,8 @@ class Service:
             RuntimeError: If the service has not been started.
         """
         self._require_process()
-        self._process.stdin.close()
+        self._closing = True
+        self._close_if_idle()
         if timeout is None:
             return None
         try:
@@ -501,6 +507,20 @@ class Service:
         self._process.wait()
         self._join_threads(time.monotonic() + timeout)
         return self._process.returncode
+
+    def _close_if_idle(self) -> None:
+        """
+        Close the worker process's input stream, if closing was requested
+        and no started task is still pending.
+        """
+        if not self._closing:
+            return
+        pending = (TaskStatus.QUEUED, TaskStatus.RUNNING)
+        if any(task.status in pending for task in list(self._tasks.values())):
+            return
+        with self._stdin_lock:
+            if not self._process.stdin.closed:
+                self._process.stdin.close()
 
     def kill(self) -> None:
         """
@@ -1050,6 +1070,8 @@ class Task:
         with self.cv:
             if self.status != TaskStatus.INITIAL:
                 raise RuntimeError("Task is not in the INITIAL state")
+            if self.service._closing:
+                raise RuntimeError("Service is closing; no new task can start")
 
             self.status = TaskStatus.QUEUED
 
@@ -1185,6 +1207,7 @@ class Task:
         if self.status.is_finished():
             with self.cv:
                 self.cv.notify_all()
+            self.service._close_if_idle()
 
     def _crash(self, error: str):
         event = TaskEvent(self, ResponseType.CRASH)

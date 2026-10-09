@@ -108,6 +108,24 @@ def test_close_without_timeout_returns_at_once():
     service.wait_for(timeout=10)
 
 
+def test_close_lets_started_tasks_finish():
+    """Tasks started before closing can still call into service objects."""
+
+    class Source:
+        def get(self):
+            return 42
+
+    service = appose.system().python()
+    task = service.task(
+        "import time\ntime.sleep(0.5)\nsource.get()", {"source": Source()}
+    ).start()
+    service.close()
+    with pytest.raises(RuntimeError, match="closing"):
+        service.task("1 + 1").start()
+    assert task.wait_for().result() == 42
+    assert service.wait_for(timeout=10) == 0
+
+
 def test_wait_for_timeout():
     service = appose.system().python()
     start_sleeping(service)
