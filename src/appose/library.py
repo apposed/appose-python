@@ -21,6 +21,12 @@ import importlib.abc
 import sys
 import threading
 from importlib.machinery import ModuleSpec
+from pathlib import Path
+
+try:
+    from importlib.resources.abc import TraversableResources
+except ImportError:  # Python < 3.11
+    from importlib.abc import TraversableResources
 
 
 class _Library:
@@ -59,6 +65,14 @@ class _Library:
         return f"{self.origin}/{relpath}" if self.package else self.origin
 
 
+class _LibraryResources(TraversableResources):
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def files(self) -> Path:
+        return self._path
+
+
 class _LibraryLoader(importlib.abc.SourceLoader):
     def __init__(self, library: _Library, relpath: str, is_package: bool) -> None:
         self._library = library
@@ -74,6 +88,14 @@ class _LibraryLoader(importlib.abc.SourceLoader):
 
     def is_package(self, fullname: str) -> bool:
         return self._is_package
+
+    def get_resource_reader(self, fullname: str) -> TraversableResources | None:
+        # NB: Resources are read from the package's directory on disk, so they
+        # are available only for packages registered by path.
+        if not self._is_package:
+            return None
+        path = Path(self.get_filename(fullname)).parent
+        return _LibraryResources(path) if path.is_dir() else None
 
 
 class _LibraryFinder(importlib.abc.MetaPathFinder):
