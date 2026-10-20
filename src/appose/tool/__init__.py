@@ -247,9 +247,12 @@ class Tool(ABC):
         """
         self._do_exec(cwd=None, silent=True, include_flags=False, args=args)
 
-    def _download(self) -> Path:
+    def _download(self, url: str | None = None) -> Path:
         """
-        Download the tool from its URL.
+        Download the tool.
+
+        Args:
+            url: The URL to download from, or None for the tool's own URL.
 
         Returns:
             Path to the downloaded file.
@@ -257,14 +260,13 @@ class Tool(ABC):
         Raises:
             IOError: If download fails or URL is not available for this platform.
         """
-        if self.url is None:
-            raise OSError(
-                f"{self.name} is not available for this platform ({platform.PLATFORM}). "
-                "Please install it manually."
-            )
-        return self._download_from(self.url)
-
-    def _download_from(self, url: str) -> Path:
+        if url is None:
+            if self.url is None:
+                raise OSError(
+                    f"{self.name} is not available for this platform ({platform.PLATFORM}). "
+                    "Please install it manually."
+                )
+            url = self.url
         return download.download(self.name, url, self._update_download_progress)
 
     def _upgrade(self, version: str | None) -> None:
@@ -291,7 +293,7 @@ class Tool(ABC):
         if url is None:
             return
         self._output(f"Updating {self.name} to {version}\n")
-        archive = self._download_from(url)
+        archive = self._download(url)
         self._decompress(archive)
 
     def _latest_version(self) -> str | None:

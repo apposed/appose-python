@@ -18,6 +18,9 @@ from .util import message
 if TYPE_CHECKING:
     from typing import Self
 
+    import numpy
+    import numpy.typing as npt
+
 
 class SharedMemory(shared_memory.SharedMemory):
     """
@@ -157,7 +160,9 @@ class NDArray:
             f"shm='{self.shm.name}' ({self.shm.rsize}))"
         )
 
-    def __array__(self, dtype=None, copy=None):
+    def __array__(
+        self, dtype: npt.DTypeLike = None, copy: bool | None = None
+    ) -> numpy.ndarray:
         """
         Support numpy.asarray(nda), which wraps the array data as a NumPy
         ndarray without copying it; the NumPy array uses the same SharedMemory.
@@ -178,7 +183,7 @@ class NDArray:
             )
         return arr.astype(dtype, copy=bool(copy))
 
-    def ndarray(self):
+    def ndarray(self) -> numpy.ndarray:
         """
         Create a NumPy ndarray object for working with the array data.
         No array data is copied; the NumPy array wraps the same SharedMemory.
@@ -194,7 +199,7 @@ class NDArray:
         return self.__array__()
 
     @classmethod
-    def copy_of(cls, arr) -> NDArray:
+    def copy_of(cls, arr: numpy.ndarray) -> NDArray:
         """
         Create an NDArray in new shared memory, holding a copy of the given
         NumPy array.

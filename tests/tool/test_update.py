@@ -42,7 +42,9 @@ class FakeTool(Tool):
     def _download_url(self, version: str) -> str | None:
         return f"https://example.com/fake/{version}"
 
-    def _download_from(self, url: str) -> Path:
+    def _download(self, url: str | None = None) -> Path:
+        if url is None:
+            url = self.url
         self.downloads.append(url.rsplit("/", 1)[-1])
         return Path(url)
 

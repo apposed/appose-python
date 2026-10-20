@@ -20,7 +20,12 @@ _encoders: dict[type, tuple[str, Any]] = {}
 _decoders: dict[str, Any] = {}
 
 
-def register(obj_type: type, appose_type: str, encoder, decoder) -> None:
+def register(
+    obj_type: type,
+    appose_type: str,
+    encoder: Callable[[Any], Any],
+    decoder: Callable[[Any], Any],
+) -> None:
     """
     Register encoder and decoder functions for a custom Appose type.
 
@@ -139,7 +144,7 @@ class _ApposeJSONEncoder(json.JSONEncoder):
 
             # Export the object so it persists for future tasks.
             if _worker_instance is not None:
-                _worker_instance.exports[var_name] = obj
+                _worker_instance._exports[var_name] = obj
 
             return {
                 "appose_type": "worker_object",

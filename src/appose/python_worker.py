@@ -52,7 +52,7 @@ class Task:
         self.cancel_requested = False
 
     def export(self, **kwargs):
-        self._worker.exports.update(kwargs)
+        self._worker._exports.update(kwargs)
 
     def update(
         self,
@@ -88,7 +88,7 @@ class Task:
         try:
             # Populate script bindings.
             binding = {"task": self}
-            binding.update(self._worker.exports)
+            binding.update(self._worker._exports)
             if self._inputs is not None:
                 binding.update(self._inputs)
 
@@ -189,10 +189,10 @@ class _PendingCall:
 
 class Worker:
     def __init__(self):
-        self.tasks: dict[str, Task] = {}
-        self.queue: list[Task] = []
-        self.exports: dict[str, Any] = {}
-        self.calls: dict[str, _PendingCall] = {}
+        self._tasks: dict[str, Task] = {}
+        self._queue: list[Task] = []
+        self._exports: dict[str, Any] = {}
+        self._calls: dict[str, _PendingCall] = {}
         self._stdout_lock = Lock()
 
         # Flag this process as a worker, not a service.
@@ -204,16 +204,16 @@ class Worker:
         """
         Process tasks from the task queue.
         """
-        self.running = True
+        self._running = True
         Thread(target=self._process_input, name="Appose-Receiver").start()
         Thread(target=self._cleanup_threads, name="Appose-Janitor").start()
 
-        while self.running:
-            if len(self.queue) == 0:
+        while self._running:
+            if len(self._queue) == 0:
                 # Nothing queued, so wait a bit.
                 sleep(0.05)
                 continue
-            task = self.queue.pop()
+            task = self._queue.pop()
             task._run()
 
     def _send(self, response: Args) -> None:
@@ -247,7 +247,7 @@ class Worker:
         """
         call_id = uuid4().hex
         pending = _PendingCall()
-        self.calls[call_id] = pending
+        self._calls[call_id] = pending
         request = {
             "responseType": ResponseType.CALL.value,
             "call": call_id,
@@ -263,7 +263,7 @@ class Worker:
                 raise RuntimeError("Service connection closed")
             self._send(request)
         except BaseException:
-            self.calls.pop(call_id, None)
+            self._calls.pop(call_id, None)
             raise
         pending.event.wait()
         reply = pending.reply or {}
@@ -278,10 +278,10 @@ class Worker:
             except EOFError:
                 line = None
             if not line:
-                self.running = False
+                self._running = False
                 # Release any threads still awaiting replies from the service.
-                for call_id in list(self.calls):
-                    pending = self.calls.pop(call_id, None)
+                for call_id in list(self._calls):
+                    pending = self._calls.pop(call_id, None)
                     if pending is not None:
                         pending.resolve({"error": "Service connection closed"})
                 return
@@ -309,7 +309,7 @@ class Worker:
             # NB: If the request was meant to start a task, the service is
             # waiting for that task to finish, so we must report it failed.
             uuid = request.get("task")
-            if isinstance(uuid, str) and uuid not in self.tasks:
+            if isinstance(uuid, str) and uuid not in self._tasks:
                 Task(self, uuid).fail(error)
 
     def _reject(self, line: str, error: str) -> None:
@@ -332,7 +332,7 @@ class Worker:
             )
             return
         if request_type == RequestType.REPLY.value:
-            pending = self.calls.pop(raw.get("call"), None)
+            pending = self._calls.pop(raw.get("call"), None)
             if pending is not None:
                 pending.resolve(
                     {"error": f"Worker could not decode the service's reply:\n{error}"}
@@ -352,10 +352,10 @@ class Worker:
             inputs = request.get("inputs")
             queue = request.get("queue")
             task = Task(self, uuid, script, inputs)
-            self.tasks[uuid] = task
+            self._tasks[uuid] = task
             if queue == "main":
                 # Add the task to the main thread queue.
-                self.queue.append(task)
+                self._queue.append(task)
             else:
                 # Create a thread and save a reference to it, in case its script
                 # kills the thread. This happens e.g. if it calls sys.exit.
@@ -371,36 +371,36 @@ class Worker:
 
         elif request_type == RequestType.REPLY:
             call_id = request.get("call")
-            pending = self.calls.pop(call_id, None)
+            pending = self._calls.pop(call_id, None)
             if pending is None:
                 print(f"No such call: {call_id}", file=sys.stderr)
                 return
             pending.resolve(request)
 
         elif request_type == RequestType.CANCEL:
-            task = self.tasks.get(uuid)
+            task = self._tasks.get(uuid)
             if task is None:
                 print(f"No such task: {uuid}", file=sys.stderr)
                 return
             task.cancel_requested = True
 
     def _cleanup_threads(self) -> None:
-        while self.running:
+        while self._running:
             sleep(0.05)
             dead = {
                 uuid: task
-                for uuid, task in self.tasks.items()
+                for uuid, task in self._tasks.items()
                 if task._thread is not None and not task._thread.is_alive()
             }
             for uuid, task in dead.items():
-                self.tasks.pop(uuid)
+                self._tasks.pop(uuid)
                 if not task._finished:
                     # The task died before reporting a terminal status.
                     # We report this situation as failure by thread death.
                     task.fail("thread death")
 
 
-def _run_startup_script(worker: Worker, env_var: str, label: str, export: bool):
+def _run_startup_script(worker: Worker, env_var: str, label: str, export: bool) -> None:
     script_path = os.environ.get(env_var)
     if not script_path or not os.path.exists(script_path):
         return
@@ -415,7 +415,7 @@ def _run_startup_script(worker: Worker, env_var: str, label: str, export: bool):
         if export:
             for key, value in namespace.items():
                 if not key.startswith("_"):
-                    worker.exports[key] = value
+                    worker._exports[key] = value
 
         # Clean up the temp file.
         os.remove(script_path)

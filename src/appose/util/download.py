@@ -81,7 +81,7 @@ def download(
 
         # Download file with progress tracking
         request = urllib.request.Request(
-            final_url, headers={"User-Agent": user_agent()}
+            final_url, headers={"User-Agent": _user_agent()}
         )
 
         with urllib.request.urlopen(request) as response, os.fdopen(fd, "wb") as f:
@@ -112,7 +112,7 @@ def download(
         raise OSError(f"Failed to download {name} from {url_path}: {e}") from e
 
 
-def un_bzip2(source: Path, destination: Path) -> None:
+def _un_bzip2(source: Path, destination: Path) -> None:
     """
     Decompress a bzip2 file into a new file.
 
@@ -152,13 +152,13 @@ def unpack(input_file: Path, output_dir: Path) -> None:
     filename = input_file.name.lower()
 
     if filename.endswith(".tar"):
-        un_tar(input_file, output_dir)
+        _un_tar(input_file, output_dir)
     elif filename.endswith(".tar.bz2"):
-        un_tar_bz2(input_file, output_dir)
+        _un_tar_bz2(input_file, output_dir)
     elif filename.endswith(".tar.gz"):
-        un_tar_gz(input_file, output_dir)
+        _un_tar_gz(input_file, output_dir)
     elif filename.endswith(".zip"):
-        un_zip(input_file, output_dir)
+        _un_zip(input_file, output_dir)
     else:
         _unpack_by_magic_bytes(input_file, output_dir)
 
@@ -176,18 +176,18 @@ def _unpack_by_magic_bytes(input_file: Path, output_dir: Path) -> None:
         raise OSError(f"File too small to detect archive type: {input_file.name}")
     # GZip magic: 1F 8B
     if magic[:2] == b"\x1f\x8b":
-        un_tar_gz(input_file, output_dir)
+        _un_tar_gz(input_file, output_dir)
     # BZip2 magic: 42 5A 68 ("BZh")
     elif magic[:3] == b"\x42\x5a\x68":
-        un_tar_bz2(input_file, output_dir)
+        _un_tar_bz2(input_file, output_dir)
     # ZIP magic: 50 4B 03 04 ("PK\x03\x04")
     elif magic[:4] == b"\x50\x4b\x03\x04":
-        un_zip(input_file, output_dir)
+        _un_zip(input_file, output_dir)
     else:
         raise ValueError(f"Unsupported archive type for file: {input_file.name}")
 
 
-def un_zip(source: Path, destination: Path) -> None:
+def _un_zip(source: Path, destination: Path) -> None:
     """
     Decompress a zip file into a directory.
 
@@ -225,7 +225,7 @@ def un_zip(source: Path, destination: Path) -> None:
                     output_file.chmod(output_file.stat().st_mode | 0o100)
 
 
-def un_tar(input_file: Path, output_dir: Path) -> None:
+def _un_tar(input_file: Path, output_dir: Path) -> None:
     """
     Untar an input file into an output directory.
 
@@ -246,7 +246,7 @@ def un_tar(input_file: Path, output_dir: Path) -> None:
         tar.extractall(path=output_dir)
 
 
-def un_tar_gz(input_file: Path, output_dir: Path) -> None:
+def _un_tar_gz(input_file: Path, output_dir: Path) -> None:
     """
     Decompress a gzip file and then untar it into a directory.
 
@@ -267,7 +267,7 @@ def un_tar_gz(input_file: Path, output_dir: Path) -> None:
         tar.extractall(path=output_dir)
 
 
-def un_tar_bz2(input_file: Path, output_dir: Path) -> None:
+def _un_tar_bz2(input_file: Path, output_dir: Path) -> None:
     """
     Decompress a bzip2 file and then untar it into a directory.
 
@@ -287,8 +287,8 @@ def un_tar_bz2(input_file: Path, output_dir: Path) -> None:
         temp_tar_path = Path(temp_tar.name)
 
     try:
-        un_bzip2(input_file, temp_tar_path)
-        un_tar(temp_tar_path, output_dir)
+        _un_bzip2(input_file, temp_tar_path)
+        _un_tar(temp_tar_path, output_dir)
     finally:
         temp_tar_path.unlink(missing_ok=True)
 
@@ -309,7 +309,7 @@ def redirected_url(url: str) -> str:
         HTTPError: If the URL is invalid or connection fails.
     """
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": user_agent()})
+        request = urllib.request.Request(url, headers={"User-Agent": _user_agent()})
         with urllib.request.urlopen(request) as response:
             # If we got here, either no redirect or urllib already followed it
             return response.url if hasattr(response, "url") else url
@@ -352,7 +352,7 @@ def redirect_location(url: str) -> str | None:
             return None
 
     opener = urllib.request.build_opener(NoRedirect)
-    request = urllib.request.Request(url, headers={"User-Agent": user_agent()})
+    request = urllib.request.Request(url, headers={"User-Agent": _user_agent()})
     try:
         with opener.open(request):
             return None
@@ -373,7 +373,7 @@ def get_file_size(url: str) -> int:
         The size of the file in bytes, or 1 if unable to determine.
     """
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": user_agent()})
+        request = urllib.request.Request(url, headers={"User-Agent": _user_agent()})
         with urllib.request.urlopen(request) as response:
             # Check for redirects
             if 300 <= response.status < 400:
@@ -392,7 +392,7 @@ def get_file_size(url: str) -> int:
         return 1
 
 
-def user_agent() -> str:
+def _user_agent() -> str:
     """
     Generate a User-Agent string for HTTP requests.
 

@@ -176,7 +176,7 @@ class ServiceProxy:
         self._worker = worker
         self._var = var
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         if name.startswith("__") and name.endswith("__"):
             # Note: Libraries probe for dunder attributes via getattr/hasattr
             # (e.g. numpy's __array_interface__), and Python never looks up
@@ -184,11 +184,11 @@ class ServiceProxy:
             raise AttributeError(name)
         return self._worker._invoke(self._var, "get", name=name)
 
-    def __call__(self, *args):
+    def __call__(self, *args: Any) -> Any:
         return self._worker._invoke(self._var, "call", args=list(args))
 
-    def __dir__(self):
+    def __dir__(self) -> list[str]:
         return self._worker._invoke(self._var, "dir")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ServiceProxy({self._var!r})"

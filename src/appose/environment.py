@@ -139,7 +139,7 @@ class Environment:
         self.builder().delete()
         return self
 
-    def python(self, *args) -> Service:
+    def python(self, *args: str) -> Service:
         """
         Create a Python script service, or launch a custom Python process.
 
@@ -265,7 +265,7 @@ class Environment:
         ]
         return self.service(java_exes, *args)
 
-    def service(self, exes: list[str], *args) -> Service:
+    def service(self, exes: list[str], *args: str) -> Service:
         """
         Create a service with the given command line arguments.
 

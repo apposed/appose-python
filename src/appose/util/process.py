@@ -13,7 +13,7 @@ import signal
 import subprocess
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import IO, Callable
 
 
 def builder(
@@ -217,7 +217,9 @@ def _read_streams(
         raise primary
 
 
-def _read_stream(stream, consumer: Callable[[str], None] | None) -> None:
+def _read_stream(
+    stream: IO[str] | None, consumer: Callable[[str], None] | None
+) -> None:
     """
     Read a single stream until EOF, reporting complete lines and any final partial line.
 

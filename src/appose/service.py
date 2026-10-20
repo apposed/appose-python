@@ -1062,12 +1062,12 @@ class Task:
         self.outputs: Args = {}
         self.status: TaskStatus = TaskStatus.INITIAL
         self.error: str | None = None
-        self.listeners: list[Callable[[TaskEvent], None]] = []
-        self.cv: threading.Condition = threading.Condition()
+        self._listeners: list[Callable[[TaskEvent], None]] = []
+        self._cv: threading.Condition = threading.Condition()
         self.service._tasks[self.uuid] = self
 
     def start(self) -> Task:
-        with self.cv:
+        with self._cv:
             if self.status != TaskStatus.INITIAL:
                 raise RuntimeError("Task is not in the INITIAL state")
             if self.service._closing:
@@ -1091,11 +1091,11 @@ class Task:
         Returns:
             This task, for chaining method calls.
         """
-        with self.cv:
+        with self._cv:
             if self.status != TaskStatus.INITIAL:
                 raise RuntimeError("Task is not in the INITIAL state")
 
-            self.listeners.append(listener)
+            self._listeners.append(listener)
         return self
 
     def wait_for(self) -> Task:
@@ -1108,7 +1108,7 @@ class Task:
         Raises:
             TaskException: If the task fails, is canceled, or crashes.
         """
-        with self.cv:
+        with self._cv:
             if self.status == TaskStatus.INITIAL:
                 self.start()
 
@@ -1118,7 +1118,7 @@ class Task:
                     self._raise_if_failed()
                 return self
 
-            self.cv.wait()
+            self._cv.wait()
 
         # After waiting, check if task failed
         self._raise_if_failed()
@@ -1201,22 +1201,22 @@ class Task:
         maximum = response.get("maximum")
         info = response.get("info")
         event = TaskEvent(self, response_type, message, current, maximum, info)
-        for listener in self.listeners:
+        for listener in self._listeners:
             listener(event)
 
         if self.status.is_finished():
-            with self.cv:
-                self.cv.notify_all()
+            with self._cv:
+                self._cv.notify_all()
             self.service._close_if_idle()
 
-    def _crash(self, error: str):
+    def _crash(self, error: str) -> None:
         event = TaskEvent(self, ResponseType.CRASH)
         self.status = TaskStatus.CRASHED
         self.error = error
-        for listener in self.listeners:
+        for listener in self._listeners:
             listener(event)
-        with self.cv:
-            self.cv.notify_all()
+        with self._cv:
+            self._cv.notify_all()
 
     def __str__(self):
         return f"{self.uuid=}, {self.status=}, {self.error=}"
