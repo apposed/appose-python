@@ -9,15 +9,16 @@ TODO
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .service import Service
 from .syntax import GroovySyntax, PythonSyntax
 from .util.filepath import find_exe
 
 if TYPE_CHECKING:
-    from .builder import Builder, EnvStatus
+    from .builder import Builder, BuildListener, EnvStatus
 
 
 class Environment:
@@ -327,3 +328,91 @@ class Environment:
         all_args.extend(args)
 
         return Service(self.base(), self.env_vars(), *all_args)
+
+
+# Locks serializing builds of LazyEnvironments, keyed by environment name.
+_build_locks: dict[str, threading.Lock] = {}
+_build_locks_lock = threading.Lock()
+
+
+class LazyEnvironment:
+    """
+    An Appose environment that is built on first use, once, and then shared
+    by any number of ResidentWorkers.
+
+    Builds of environments with the same name are serialized, even across
+    instances, because they typically share a directory on disk: e.g. when
+    the environment's configuration changes while an older build is still
+    running. So instances whose builders target the same directory should be
+    given the same name.
+    """
+
+    def __init__(self, name: str, builder: Builder, activate: str | None = None):
+        """
+        Args:
+            name: Name of the environment, as reported to listeners, and
+                identifying builds to serialize. It is not given to the
+                builder, which must already be configured with where to
+                build, e.g. via Builder.name or Builder.base.
+            builder: Builder for the environment; built on first use.
+            activate: Name of the sub-environment to activate once built
+                (e.g. a pixi environment), or None to use the environment as
+                built.
+        """
+        self._name = name
+        self._activate = activate
+        self._listeners: list[BuildListener] = []
+        self._env: Environment | None = None
+        # Note: Subscribe once, here, and dispatch to the current listeners,
+        # because builders accumulate subscribers with every call.
+        self._builder = (
+            builder.subscribe_progress(
+                lambda title, current, maximum: self._notify(
+                    "build_progress", title, current, maximum
+                )
+            )
+            .subscribe_output(lambda text: self._notify("build_output", text))
+            .subscribe_error(lambda text: self._notify("build_error", text))
+        )
+
+    def name(self) -> str:
+        return self._name
+
+    def add_build_listener(self, listener: BuildListener) -> LazyEnvironment:
+        self._listeners.append(listener)
+        return self
+
+    def is_built(self) -> bool:
+        """Whether the environment has been built by this instance."""
+        return self._env is not None
+
+    def get(self) -> Environment:
+        """
+        Get the environment, building it if this is its first use.
+
+        Raises:
+            BuildException: If the environment cannot be built.
+        """
+        if self._env is not None:
+            return self._env
+        with _build_locks_lock:
+            lock = _build_locks.setdefault(self._name, threading.Lock())
+        with lock:
+            if self._env is not None:
+                return self._env
+            self._notify("build_started")
+            try:
+                built = self._builder.build()
+                self._env = (
+                    built if self._activate is None else built.activate(self._activate)
+                )
+            except Exception as e:
+                self._notify("build_finished", e)
+                raise
+            self._notify("build_finished", None)
+            return self._env
+
+    def _notify(self, method: str, *args: Any) -> None:
+        # Note: Iterate over a copy, so listeners can be added mid-build.
+        for listener in list(self._listeners):
+            getattr(listener, method)(self._name, *args)

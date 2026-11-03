@@ -197,6 +197,7 @@ from pathlib import Path
 from ._version import __version__  # noqa: F401
 from .builder import (
     BuildException,
+    BuildListener,  # noqa: F401
     DynamicBuilder,
     EnvStatus,  # noqa: F401
     SimpleBuilder,
@@ -205,8 +206,8 @@ from .builder import (
 from .builder.mamba import MambaBuilder
 from .builder.pixi import PixiBuilder
 from .builder.uv import UvBuilder
-from .environment import Environment
-from .service import TaskException  # noqa: F401
+from .environment import Environment, LazyEnvironment  # noqa: F401
+from .service import ResidentWorker, TaskException  # noqa: F401
 from .shm import NDArray, SharedMemory  # noqa: F401
 
 

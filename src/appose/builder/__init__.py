@@ -92,6 +92,42 @@ class EnvStatus(Enum):
     CURRENT = "CURRENT"
 
 
+class BuildListener:
+    """
+    Receives notifications about the build of an Appose environment, from
+    start to finish.
+
+    Unlike the individual Builder.subscribe_* callbacks, every notification
+    names the environment it concerns, and the build's start and end are
+    events too, so that one listener can follow several builds. Every method
+    does nothing by default; override the ones of interest.
+
+    Note that build_error receives the build tool's stderr stream, which is
+    *not* a failure report: pixi, for example, writes all of its ordinary
+    status there, including its success message. A failed build is signaled
+    only by a non-None error passed to build_finished.
+
+    See also: LazyEnvironment.add_build_listener
+    """
+
+    def build_started(self, env_name: str) -> None:
+        """Called when a build (or up-to-date check) of the environment begins."""
+
+    def build_progress(
+        self, env_name: str, title: str, current: int, maximum: int
+    ) -> None:
+        """Called as the build advances; maximum is 0 when unknown."""
+
+    def build_output(self, env_name: str, text: str) -> None:
+        """Called with the build tool's stdout."""
+
+    def build_error(self, env_name: str, text: str) -> None:
+        """Called with the build tool's stderr, which is not a failure signal."""
+
+    def build_finished(self, env_name: str, error: Exception | None) -> None:
+        """Called when the build ends; error is None on success."""
+
+
 class Builder(ABC):
     """
     Base class for all Appose environment builders.

@@ -32,6 +32,8 @@ from .util.message import Args, decode, encode, proxify_worker_objects
 if TYPE_CHECKING:
     from typing import Self
 
+    from .environment import Environment, LazyEnvironment
+
 
 class TaskException(Exception):
     """
@@ -1220,3 +1222,119 @@ class Task:
 
     def __str__(self):
         return f"{self.uuid=}, {self.status=}, {self.error=}"
+
+
+class ResidentWorker:
+    """
+    An Appose worker process that stays resident across tasks: it is started
+    on first use, reused afterward, and ended only on request.
+
+    Keeping the worker alive is what makes repeated runs fast: modules the
+    worker has imported stay imported, and objects a task hands to
+    task.export(...) stay available to later tasks. The price is that the
+    worker's memory, GPU memory included, stays claimed until release() ends
+    the process, which is the only reliable way to free it.
+
+    A worker runs in a LazyEnvironment, which it builds if needed; any number
+    of workers may share one environment. If the worker dies (e.g. it
+    crashes, or kill() is called), the next task transparently starts a new
+    process.
+    """
+
+    def __init__(
+        self,
+        environment: LazyEnvironment,
+        launcher: Callable[[Environment], Service],
+    ):
+        """
+        Args:
+            environment: Environment the worker runs in.
+            launcher: Creates the worker's service from the built environment,
+                e.g. lambda env: env.python().init("import numpy").
+        """
+        self._environment = environment
+        self._launcher = launcher
+        self._exclusive = threading.RLock()
+        self._lock = threading.RLock()
+        self._debug: Callable[[str], Any] | None = None
+        self._service: Service | None = None
+
+    def environment(self) -> LazyEnvironment:
+        return self._environment
+
+    def exclusive(self) -> threading.RLock:
+        """
+        Get a lock for callers needing exclusive use of the worker, e.g. to
+        attribute its output to a single task. The worker's other methods do
+        not take this lock, so it can be released or killed while someone
+        holds it.
+        """
+        return self._exclusive
+
+    def debug(self, listener: Callable[[str], Any] | None) -> None:
+        """
+        Set where the worker's debug output goes: stderr lines, non-protocol
+        stdout lines and protocol traffic, as described by Service.debug.
+        May be changed at any time, including while the worker is running;
+        None discards the output.
+        """
+        self._debug = listener
+
+    def service(self) -> Service:
+        """
+        Get the worker's service, building the environment and starting the
+        worker process first if needed.
+
+        Raises:
+            BuildException: If the environment cannot be built.
+        """
+        with self._lock:
+            if self._service is not None and self._service.is_alive():
+                return self._service
+            s = self._launcher(self._environment.get())
+            s.debug(self._forward_debug)
+            s.start()
+            self._service = s
+            return s
+
+    def task(self, script: str, inputs: Args | None = None) -> Task:
+        """Create a task to run on this worker."""
+        return self.service().task(script, inputs)
+
+    def is_alive(self) -> bool:
+        """Whether the worker process is currently running."""
+        with self._lock:
+            return self._service is not None and self._service.is_alive()
+
+    def release(self) -> None:
+        """
+        End the worker process gently, letting pending tasks finish, and
+        releasing everything it holds. The environment stays built.
+        """
+        with self._lock:
+            if self._service is None:
+                return
+            self._service.close()
+            self._service = None
+
+    def kill(self) -> None:
+        """End the worker process immediately, interrupting any pending tasks."""
+        with self._lock:
+            if self._service is None:
+                return
+            self._service.kill()
+            self._service = None
+
+    def close(self) -> None:
+        self.release()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb) -> None:
+        self.close()
+
+    def _forward_debug(self, msg: str) -> None:
+        listener = self._debug
+        if listener is not None:
+            listener(msg)
